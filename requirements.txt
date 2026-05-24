@@ -1,0 +1,6 @@
+openai
+langchain
+requests
+python-dotenv
+chromadb
+playwright

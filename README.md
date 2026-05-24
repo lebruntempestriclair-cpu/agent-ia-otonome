@@ -14,5 +14,11 @@ Ce projet fournit la base de configuration pour un agent IA autonome capable de 
 
 ## Utilisation
 1. Suivez le guide d'installation pour préparer votre environnement.
-2. Copiez le contenu de `SYSTEM_PROMPT.md` dans votre interface de chat IA (ChatGPT, Claude, ou une instance locale via LangChain).
-3. Donnez l'instruction de démarrage indiquée à la fin du prompt.
+2. Installez les dépendances : `pip install -r requirements.txt`.
+3. Lancez l'agent : `python astra.py`.
+4. Copiez le contenu de `SYSTEM_PROMPT.md` dans votre interface de chat IA si vous souhaitez configurer une instance personnalisée.
+
+### Commandes Astra
+- Tapez vos requêtes normalement.
+- Exemple : "Crée un fichier test.py"
+- Pour quitter : tapez `exit` ou `quitter`.
