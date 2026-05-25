@@ -6,9 +6,14 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 from typing import Optional, List
 import uvicorn
 
@@ -25,6 +30,27 @@ app = FastAPI(
     description="Autonomous AI agent capable of executing tasks",
     version="1.0.0"
 )
+
+# Security Configuration
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    """
+    Dependency to validate API Key.
+    Only enforced if REQUIRE_API_KEY environment variable is set to 'true'.
+    """
+    require_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
+
+    if require_api_key:
+        master_key = os.getenv("API_KEY")
+        if not master_key or api_key != master_key:
+            logger.warning("Unauthorized access attempt: invalid or missing API Key")
+            raise HTTPException(
+                status_code=403,
+                detail="Could not validate credentials"
+            )
+    return api_key
 
 # Add CORS middleware
 app.add_middleware(
@@ -66,7 +92,7 @@ async def health_check():
         environment=os.getenv("DEPLOYMENT_ENV", "development")
     )
 
-@app.post("/task/create", response_model=TaskResponse)
+@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(get_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
@@ -82,7 +108,7 @@ async def create_task(task: Task):
         logger.error(f"Error creating task: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/task/{task_id}")
+@app.get("/task/{task_id}", dependencies=[Depends(get_api_key)])
 async def get_task(task_id: str):
     """Get task status"""
     try:
@@ -97,7 +123,7 @@ async def get_task(task_id: str):
         logger.error(f"Error retrieving task: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/tasks")
+@app.get("/tasks", dependencies=[Depends(get_api_key)])
 async def list_tasks():
     """List all tasks"""
     try:
@@ -111,7 +137,7 @@ async def list_tasks():
         logger.error(f"Error listing tasks: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/execute")
+@app.post("/execute", dependencies=[Depends(get_api_key)])
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
