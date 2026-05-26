@@ -6,8 +6,10 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
@@ -19,11 +21,53 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ============ Settings ============
+
+class Settings:
+    """Cached environment variables to reduce syscall overhead"""
+    def __init__(self):
+        self.REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
+        self.API_KEY = os.getenv("API_KEY", "default_secret_key")
+        self.DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "development")
+        self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
+        self.API_PORT = int(os.getenv("API_PORT", 8000))
+        self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
+
+settings = Settings()
+
+# ============ Security ============
+
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def verify_api_key(header_value: str = Security(api_key_header)):
+    """Validate the API key from the header if required"""
+    if settings.REQUIRE_API_KEY:
+        if not header_value or header_value != settings.API_KEY:
+            logger.warning("Invalid or missing API key provided")
+            raise HTTPException(
+                status_code=403,
+                detail="Could not validate credentials"
+            )
+    return header_value
+
+# ============ App Setup ============
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern lifespan management for startup and shutdown"""
+    logger.info("Agent IA Autonome starting...")
+    # TODO: Initialize connections, load models, etc.
+    yield
+    logger.info("Agent IA Autonome shutting down...")
+    # TODO: Close connections, save state, etc.
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Agent IA Autonome",
     description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -59,14 +103,14 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
-    )
+    """Health check endpoint - optimized to return raw dict if needed"""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": settings.DEPLOYMENT_ENV
+    }
 
-@app.post("/task/create", response_model=TaskResponse)
+@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
@@ -78,11 +122,11 @@ async def create_task(task: Task):
             task_id="task_123",
             status="pending"
         )
-    except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error creating task")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/task/{task_id}")
+@app.get("/task/{task_id}", dependencies=[Depends(verify_api_key)])
 async def get_task(task_id: str):
     """Get task status"""
     try:
@@ -93,11 +137,11 @@ async def get_task(task_id: str):
             "status": "pending",
             "progress": 0
         }
-    except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception(f"Error retrieving task: {task_id}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/tasks")
+@app.get("/tasks", dependencies=[Depends(verify_api_key)])
 async def list_tasks():
     """List all tasks"""
     try:
@@ -107,11 +151,11 @@ async def list_tasks():
             "tasks": [],
             "total": 0
         }
-    except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error listing tasks")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/execute")
+@app.post("/execute", dependencies=[Depends(verify_api_key)])
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
@@ -122,35 +166,17 @@ async def execute_task(task_id: str):
             "message": "Task execution started",
             "task_id": task_id
         }
-    except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============ Startup/Shutdown ============
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize agent on startup"""
-    logger.info("Agent IA Autonome starting...")
-    # TODO: Initialize connections, load models, etc.
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Agent IA Autonome shutting down...")
-    # TODO: Close connections, save state, etc.
+    except Exception:
+        logger.exception(f"Error executing task: {task_id}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.API_HOST,
+        port=settings.API_PORT,
+        workers=settings.API_WORKERS,
+        reload=settings.DEPLOYMENT_ENV == "development"
     )
