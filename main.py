@@ -6,11 +6,22 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+
+# Configuration Cache - avoids repeated os.getenv syscalls in request handlers
+class Settings:
+    def __init__(self):
+        self.deployment_env = os.getenv("DEPLOYMENT_ENV", "development")
+        self.api_host = os.getenv("API_HOST", "0.0.0.0")
+        self.api_port = int(os.getenv("API_PORT", 8000))
+        self.api_workers = int(os.getenv("API_WORKERS", 1))
+
+settings = Settings()
 
 # Configure logging
 logging.basicConfig(
@@ -19,11 +30,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize and cleanup agent"""
+    # Startup logic
+    logger.info("Agent IA Autonome starting...")
+    # TODO: Initialize connections, load models, etc.
+
+    yield
+
+    # Shutdown logic
+    logger.info("Agent IA Autonome shutting down...")
+    # TODO: Close connections, save state, etc.
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Agent IA Autonome",
     description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -50,21 +75,16 @@ class TaskResponse(BaseModel):
     task_id: Optional[str] = None
     status: Optional[str] = None
 
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    environment: str
-
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
-    )
+    """Health check endpoint - returns raw dict for maximum performance"""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": settings.deployment_env
+    }
 
 @app.post("/task/create", response_model=TaskResponse)
 async def create_task(task: Task):
@@ -126,31 +146,13 @@ async def execute_task(task_id: str):
         logger.error(f"Error executing task: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ============ Startup/Shutdown ============
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize agent on startup"""
-    logger.info("Agent IA Autonome starting...")
-    # TODO: Initialize connections, load models, etc.
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Agent IA Autonome shutting down...")
-    # TODO: Close connections, save state, etc.
-
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.deployment_env == "development"
     )
