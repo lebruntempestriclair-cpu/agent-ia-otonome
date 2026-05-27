@@ -6,11 +6,12 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 import uvicorn
+from functools import lru_cache
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +19,47 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ============ Configuration ============
+
+class Settings(BaseModel):
+    """Application settings and environment variables"""
+    api_key: str = Field(default="dev-key", alias="API_KEY")
+    require_api_key: bool = Field(default=False, alias="REQUIRE_API_KEY")
+    deployment_env: str = Field(default="development", alias="DEPLOYMENT_ENV")
+    api_host: str = Field(default="0.0.0.0", alias="API_HOST")
+    api_port: int = Field(default=8000, alias="API_PORT")
+    api_workers: int = Field(default=1, alias="API_WORKERS")
+
+    @classmethod
+    def load(cls):
+        return cls(
+            API_KEY=os.getenv("API_KEY", "dev-key"),
+            REQUIRE_API_KEY=os.getenv("REQUIRE_API_KEY", "false").lower() == "true",
+            DEPLOYMENT_ENV=os.getenv("DEPLOYMENT_ENV", "development"),
+            API_HOST=os.getenv("API_HOST", "0.0.0.0"),
+            API_PORT=int(os.getenv("API_PORT", "8000")),
+            API_WORKERS=int(os.getenv("API_WORKERS", "1"))
+        )
+
+@lru_cache()
+def get_settings():
+    return Settings.load()
+
+settings = get_settings()
+
+async def get_api_key(x_api_key: Optional[str] = Header(None)):
+    """Dependency to validate API key if required"""
+    if not settings.require_api_key:
+        return x_api_key
+
+    if not x_api_key or x_api_key != settings.api_key:
+        logger.warning("Unauthorized access attempt with missing or invalid API key")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials"
+        )
+    return x_api_key
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -63,10 +105,10 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
+        environment=settings.deployment_env
     )
 
-@app.post("/task/create", response_model=TaskResponse)
+@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(get_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
@@ -79,10 +121,13 @@ async def create_task(task: Task):
             status="pending"
         )
     except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating task: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
-@app.get("/task/{task_id}")
+@app.get("/task/{task_id}", dependencies=[Depends(get_api_key)])
 async def get_task(task_id: str):
     """Get task status"""
     try:
@@ -94,10 +139,13 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error retrieving task: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
-@app.get("/tasks")
+@app.get("/tasks", dependencies=[Depends(get_api_key)])
 async def list_tasks():
     """List all tasks"""
     try:
@@ -108,10 +156,13 @@ async def list_tasks():
             "total": 0
         }
     except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
-@app.post("/execute")
+@app.post("/execute", dependencies=[Depends(get_api_key)])
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
@@ -123,8 +174,11 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error executing task: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
 # ============ Startup/Shutdown ============
 
@@ -143,14 +197,10 @@ async def shutdown_event():
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.deployment_env == "development"
     )
