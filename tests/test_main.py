@@ -4,7 +4,7 @@ Unit tests for the Agent IA Autonome application
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+from main import app, settings
 
 client = TestClient(app)
 
@@ -74,6 +74,38 @@ class TestTaskExecution:
         data = response.json()
         assert data["success"] is True
         assert "message" in data
+
+class TestSecurity:
+    """Security tests for API Key authentication"""
+
+    def setup_method(self):
+        # Enable API key requirement for security tests
+        self.original_require_api_key = settings.require_api_key
+        self.original_api_key = settings.api_key
+        settings.require_api_key = True
+        settings.api_key = "test-secret-key"
+
+    def teardown_method(self):
+        # Restore original settings
+        settings.require_api_key = self.original_require_api_key
+        settings.api_key = self.original_api_key
+
+    def test_unauthorized_access_no_header(self):
+        """Test that access is denied when no API key is provided"""
+        response = client.get("/tasks")
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Could not validate credentials"
+
+    def test_unauthorized_access_wrong_key(self):
+        """Test that access is denied when wrong API key is provided"""
+        response = client.get("/tasks", headers={"X-API-Key": "wrong-key"})
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Could not validate credentials"
+
+    def test_authorized_access(self):
+        """Test that access is granted with correct API key"""
+        response = client.get("/tasks", headers={"X-API-Key": "test-secret-key"})
+        assert response.status_code == 200
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
