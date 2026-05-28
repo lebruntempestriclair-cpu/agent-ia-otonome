@@ -19,6 +19,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class Settings:
+    """Application settings loaded from environment variables"""
+    def __init__(self):
+        self.deployment_env = os.getenv("DEPLOYMENT_ENV", "development")
+        self.api_host = os.getenv("API_HOST", "0.0.0.0")
+        try:
+            self.api_port = int(os.getenv("API_PORT", 8000))
+        except (ValueError, TypeError):
+            self.api_port = 8000
+        try:
+            self.api_workers = int(os.getenv("API_WORKERS", 1))
+        except (ValueError, TypeError):
+            self.api_workers = 1
+
+# Singleton settings instance
+settings = Settings()
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Agent IA Autonome",
@@ -57,14 +74,18 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
-    )
+@app.get("/health", responses={200: {"model": HealthResponse}})
+async def health_check() -> dict:
+    """
+    Health check endpoint.
+    Returns a raw dictionary to bypass Pydantic validation overhead for this
+    high-frequency static endpoint, while maintaining OpenAPI documentation.
+    """
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": settings.deployment_env
+    }
 
 @app.post("/task/create", response_model=TaskResponse)
 async def create_task(task: Task):
@@ -143,14 +164,10 @@ async def shutdown_event():
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.deployment_env == "development"
     )
