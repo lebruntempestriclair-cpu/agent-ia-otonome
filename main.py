@@ -6,7 +6,7 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -25,6 +25,15 @@ app = FastAPI(
     description="Autonomous AI agent capable of executing tasks",
     version="1.0.0"
 )
+
+# Authentication dependency
+async def get_api_key(x_api_key: Optional[str] = Header(None)):
+    if os.getenv("REQUIRE_API_KEY", "false").lower() == "true":
+        expected_key = os.getenv("API_KEY")
+        if not x_api_key or x_api_key != expected_key:
+            logger.warning("Unauthorized access attempt")
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    return x_api_key
 
 # Add CORS middleware
 app.add_middleware(
@@ -67,7 +76,7 @@ async def health_check():
     )
 
 @app.post("/task/create", response_model=TaskResponse)
-async def create_task(task: Task):
+async def create_task(task: Task, api_key: Optional[str] = Depends(get_api_key)):
     """Create a new task for the agent"""
     try:
         logger.info(f"Creating task: {task.title}")
@@ -80,10 +89,10 @@ async def create_task(task: Task):
         )
     except Exception as e:
         logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/task/{task_id}")
-async def get_task(task_id: str):
+async def get_task(task_id: str, api_key: Optional[str] = Depends(get_api_key)):
     """Get task status"""
     try:
         logger.info(f"Fetching task: {task_id}")
@@ -95,10 +104,10 @@ async def get_task(task_id: str):
         }
     except Exception as e:
         logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/tasks")
-async def list_tasks():
+async def list_tasks(api_key: Optional[str] = Depends(get_api_key)):
     """List all tasks"""
     try:
         logger.info("Listing all tasks")
@@ -109,10 +118,10 @@ async def list_tasks():
         }
     except Exception as e:
         logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/execute")
-async def execute_task(task_id: str):
+async def execute_task(task_id: str, api_key: Optional[str] = Depends(get_api_key)):
     """Execute a task"""
     try:
         logger.info(f"Executing task: {task_id}")
@@ -124,7 +133,7 @@ async def execute_task(task_id: str):
         }
     except Exception as e:
         logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Startup/Shutdown ============
 
