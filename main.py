@@ -6,11 +6,15 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +22,27 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+class Settings:
+    """Application settings cached from environment variables"""
+    def __init__(self):
+        self.deployment_env = os.getenv("DEPLOYMENT_ENV", "development")
+        self.api_host = os.getenv("API_HOST", "0.0.0.0")
+
+        try:
+            self.api_port = int(os.getenv("API_PORT", 8000))
+        except (ValueError, TypeError):
+            logger.warning("Invalid API_PORT, falling back to 8000")
+            self.api_port = 8000
+
+        try:
+            self.api_workers = int(os.getenv("API_WORKERS", 1))
+        except (ValueError, TypeError):
+            logger.warning("Invalid API_WORKERS, falling back to 1")
+            self.api_workers = 1
+
+# Initialize settings
+settings = Settings()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -57,14 +82,18 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
-    )
+    """
+    Health check endpoint.
+    Optimized to return raw dict and bypass Pydantic validation/serialization
+    overhead for this high-frequency static response.
+    """
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": settings.deployment_env
+    }
 
 @app.post("/task/create", response_model=TaskResponse)
 async def create_task(task: Task):
@@ -143,14 +172,10 @@ async def shutdown_event():
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.deployment_env == "development"
     )
