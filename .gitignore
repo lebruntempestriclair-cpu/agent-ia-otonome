@@ -27,6 +27,13 @@ render.experimental.xml
 *.jks
 *.keystore
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.env
+
 # Google Services (e.g. APIs or Firebase)
 google-services.json
 
