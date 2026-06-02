@@ -6,8 +6,10 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+import secrets
+from fastapi import FastAPI, HTTPException, Depends, Security, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
@@ -18,6 +20,29 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# API Key Security
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    """Validate API Key if required"""
+    require_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
+    if require_api_key:
+        expected_api_key = os.getenv("API_KEY")
+        if not expected_api_key:
+            logger.error("REQUIRE_API_KEY is true but API_KEY is not set")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error"
+            )
+
+        if not api_key or not secrets.compare_digest(api_key, expected_api_key):
+            logger.warning("Unauthorized access attempt with invalid API Key")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Could not validate API Key"
+            )
+    return api_key
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -66,7 +91,7 @@ async def health_check():
         environment=os.getenv("DEPLOYMENT_ENV", "development")
     )
 
-@app.post("/task/create", response_model=TaskResponse)
+@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(get_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
@@ -79,10 +104,10 @@ async def create_task(task: Task):
             status="pending"
         )
     except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/task/{task_id}")
+@app.get("/task/{task_id}", dependencies=[Depends(get_api_key)])
 async def get_task(task_id: str):
     """Get task status"""
     try:
@@ -94,10 +119,10 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error retrieving task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/tasks")
+@app.get("/tasks", dependencies=[Depends(get_api_key)])
 async def list_tasks():
     """List all tasks"""
     try:
@@ -108,10 +133,10 @@ async def list_tasks():
             "total": 0
         }
     except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/execute")
+@app.post("/execute", dependencies=[Depends(get_api_key)])
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
@@ -123,8 +148,8 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error executing task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Startup/Shutdown ============
 
