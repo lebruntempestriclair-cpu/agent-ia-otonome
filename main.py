@@ -6,7 +6,11 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+
+# Load environment variables
+load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -27,10 +31,20 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Security: Load origins from environment and prevent insecure wildcard with credentials
+cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+
+if "*" in cors_origins and allow_credentials:
+    # Security: Starlette raises RuntimeError if allow_credentials is True and origins contain '*'
+    # We must force allow_credentials to False in this case.
+    logger.warning("CORS: Insecure configuration: wildcard origin with credentials enabled. Forcing allow_credentials=False.")
+    allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -79,8 +93,9 @@ async def create_task(task: Task):
             status="pending"
         )
     except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Log detailed error but return generic message
+        logger.error(f"Error creating task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/task/{task_id}")
 async def get_task(task_id: str):
@@ -94,8 +109,9 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Log detailed error but return generic message
+        logger.error(f"Error retrieving task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/tasks")
 async def list_tasks():
@@ -108,8 +124,9 @@ async def list_tasks():
             "total": 0
         }
     except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Log detailed error but return generic message
+        logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/execute")
 async def execute_task(task_id: str):
@@ -123,8 +140,9 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Log detailed error but return generic message
+        logger.error(f"Error executing task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Startup/Shutdown ============
 
