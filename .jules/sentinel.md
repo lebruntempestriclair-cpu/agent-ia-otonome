@@ -1,0 +1,4 @@
+## 2025-05-22 - Information Disclosure in API Error Responses
+**Vulnerability:** API endpoints were catching all exceptions and returning the raw exception string to the client in the `HTTPException` detail.
+**Learning:** This pattern was consistently used across all routes in `main.py`, suggesting a lack of centralized error handling or a misunderstanding of FastAPI's default error behavior. Raw exception strings often contain sensitive internal state, such as database connection details or stack traces, especially when external libraries fail.
+**Prevention:** Catch generic exceptions at the route level (or via a global exception handler), log the full context internally using `exc_info=True`, and return a standardized, non-descriptive error message like "Internal server error" to the client.

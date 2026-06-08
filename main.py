@@ -78,9 +78,9 @@ async def create_task(task: Task):
             task_id="task_123",
             status="pending"
         )
-    except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Error creating task", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/task/{task_id}")
 async def get_task(task_id: str):
@@ -93,9 +93,9 @@ async def get_task(task_id: str):
             "status": "pending",
             "progress": 0
         }
-    except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Error retrieving task", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/tasks")
 async def list_tasks():
@@ -107,9 +107,9 @@ async def list_tasks():
             "tasks": [],
             "total": 0
         }
-    except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Error listing tasks", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/execute")
 async def execute_task(task_id: str):
@@ -122,9 +122,9 @@ async def execute_task(task_id: str):
             "message": "Task execution started",
             "task_id": task_id
         }
-    except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Error executing task", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Startup/Shutdown ============
 
