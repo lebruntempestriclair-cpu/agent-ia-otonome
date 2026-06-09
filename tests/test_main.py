@@ -47,6 +47,37 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_api_key_uses_timing_safe_comparison(self):
+        """Verify that secrets.compare_digest is used for API key validation"""
+        import secrets
+        with patch("secrets.compare_digest", side_effect=secrets.compare_digest) as mock_compare:
+            headers = {"X-API-Key": "test_secret_key"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 200
+            mock_compare.assert_called()
+
+    def test_missing_api_key_configuration(self):
+        """Test that 500 is returned if REQUIRE_API_KEY is true but API_KEY is not set"""
+        with patch("main.settings.API_KEY", None):
+            response = client.get("/tasks", headers={"X-API-Key": "anything"})
+            assert response.status_code == 500
+            assert response.json() == {"detail": "Internal server error"}
+
+class TestCORS:
+    """Tests for CORS configuration"""
+
+    def test_cors_wildcard_origin_no_credentials(self):
+        """When origins is '*', allow_credentials should be False"""
+        # In the test setup, CORS_ORIGINS defaults to ["*"]
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert "access-control-allow-credentials" not in response.headers
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
