@@ -8,6 +8,22 @@ local.properties
 # Log/OS Files
 *.log
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Environments
+.env
+.env.local
+.env.*.local
+
 # Android Studio generated files and folders
 captures/
 .externalNativeBuild/

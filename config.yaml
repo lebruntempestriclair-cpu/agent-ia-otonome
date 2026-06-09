@@ -1,9 +1,9 @@
 # Configuration for Agent IA Autonome
 
 app:
-  name: "Agent IA Autonome"
-  version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  name: "Plateforme de Doublage Vocal Multilingue"
+  version: "0.1.0"
+  description: "Solution autonome de doublage vocal intégrant transcription, traduction et synthèse vocale avec synchronisation labiale."
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
