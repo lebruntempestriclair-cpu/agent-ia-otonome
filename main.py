@@ -4,13 +4,35 @@ Agent IA Autonome - Main Application
 Autonomous AI Agent capable of executing tasks on demand
 """
 
-import os
 import logging
-from fastapi import FastAPI, HTTPException
+import secrets
+from typing import Optional, List
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import uvicorn
+
+# ============ Configuration ============
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
+    app_name: str = "Agent IA Autonome"
+    version: str = "1.0.0"
+    deployment_env: str = "development"
+
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_workers: int = 1
+
+    # Security
+    cors_origins: List[str] = ["*"]
+    require_api_key: bool = False
+    api_key: Optional[str] = None
+
+settings = Settings()
 
 # Configure logging
 logging.basicConfig(
@@ -21,16 +43,53 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Agent IA Autonome",
+    title=settings.app_name,
     description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0"
+    version=settings.version
 )
 
+# ============ Security ============
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_api_key(api_key_header_value: str = Security(api_key_header)):
+    """Dependency to validate API key if required"""
+    if not settings.require_api_key:
+        return None
+
+    if not settings.api_key:
+        logger.error("REQUIRE_API_KEY is True but API_KEY is not set")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+
+    if api_key_header_value and secrets.compare_digest(api_key_header_value, settings.api_key):
+        return api_key_header_value
+
+    raise HTTPException(
+        status_code=403,
+        detail="Could not validate API key"
+    )
+
 # Add CORS middleware
+cors_origins = settings.cors_origins
+allow_credentials = True
+
+# Security: FastAPI CORSMiddleware does not allow wildcard "*" with credentials
+if "*" in cors_origins and allow_credentials:
+    if settings.deployment_env == "production":
+        logger.warning("Wildcard CORS with credentials not allowed in production. Disabling credentials.")
+        allow_credentials = False
+    else:
+        # In development/test, we also need to avoid the crash
+        logger.warning("Wildcard CORS with credentials not allowed. Disabling credentials to prevent crash.")
+        allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -59,14 +118,14 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - Public"""
     return HealthResponse(
         status="healthy",
-        version="1.0.0",
-        environment=os.getenv("DEPLOYMENT_ENV", "development")
+        version=settings.version,
+        environment=settings.deployment_env
     )
 
-@app.post("/task/create", response_model=TaskResponse)
+@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(get_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
@@ -79,10 +138,11 @@ async def create_task(task: Task):
             status="pending"
         )
     except Exception as e:
-        logger.error(f"Error creating task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Do not leak exception details in the response
+        logger.error(f"Error creating task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/task/{task_id}")
+@app.get("/task/{task_id}", dependencies=[Depends(get_api_key)])
 async def get_task(task_id: str):
     """Get task status"""
     try:
@@ -94,10 +154,11 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception as e:
-        logger.error(f"Error retrieving task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Do not leak exception details in the response
+        logger.error(f"Error retrieving task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/tasks")
+@app.get("/tasks", dependencies=[Depends(get_api_key)])
 async def list_tasks():
     """List all tasks"""
     try:
@@ -108,10 +169,11 @@ async def list_tasks():
             "total": 0
         }
     except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Do not leak exception details in the response
+        logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/execute")
+@app.post("/execute", dependencies=[Depends(get_api_key)])
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
@@ -123,34 +185,31 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Security: Do not leak exception details in the response
+        logger.error(f"Error executing task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Startup/Shutdown ============
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize agent on startup"""
-    logger.info("Agent IA Autonome starting...")
+    logger.info(f"{settings.app_name} starting...")
     # TODO: Initialize connections, load models, etc.
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    logger.info("Agent IA Autonome shutting down...")
+    logger.info(f"{settings.app_name} shutting down...")
     # TODO: Close connections, save state, etc.
 
 # ============ Main ============
 
 if __name__ == "__main__":
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 1))
-    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=os.getenv("DEPLOYMENT_ENV") == "development"
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.deployment_env == "development"
     )
