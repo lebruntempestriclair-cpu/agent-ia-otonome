@@ -101,7 +101,7 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
     """Health check endpoint - optimized to return raw dict if needed"""
     return {
