@@ -1,15 +1,15 @@
-# 🤖 Agent IA Autonome
+# 🎥 Plateforme de Doublage Vocal Multilingue
 
-Agent IA autonome capable d'accomplir, de faire fonctionner, d'entrer et de sélectionner des tâches à accomplir à la demande du créateur.
+Solution autonome de doublage vocal intégrant transcription, traduction et synthèse vocale avec synchronisation labiale.
 
 ## ✨ Fonctionnalités
 
-- 🎯 **Exécution autonome de tâches** - L'agent exécute automatiquement les tâches demandées
-- 🔄 **Gestion d'état persistant** - Sauvegarde et récupération de l'état de l'agent
-- 🚀 **API REST complète** - Interface HTTP pour interagir avec l'agent
-- 📊 **Monitoring en temps réel** - Suivi de l'exécution des tâches
-- 🐳 **Containerisé** - Prêt pour le déploiement avec Docker
-- 🧪 **Complètement testé** - Suite de tests unitaires complète
+- 🎙️ **Transcription Automatique (STT)** - Conversion audio en texte via Whisper/Google.
+- 🌍 **Traduction Multilingue (MT)** - Traduction contextuelle via DeepL/Google.
+- 🗣️ **Synthèse Vocale (TTS)** - Génération de voix naturelles avec SSML.
+- 👄 **Synchronisation Labiale** - Alignement visuel via Wav2Lip.
+- 📦 **Upload Volumineux** - Support de fichiers >700 Mo via upload chunké.
+- 🛡️ **Conformité RGPD** - Protection stricte des données biométriques vocales.
 
 ## 🚀 Démarrage Rapide
 
@@ -22,7 +22,7 @@ cd agent-ia-otonome
 
 # Configurer l'environnement
 cp .env.example .env
-# Éditer .env avec vos clés API
+# Éditer .env avec vos clés API (OpenAI, DeepL, Azure, etc.)
 
 # Démarrer l'application
 docker-compose up -d
@@ -31,162 +31,40 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
-### Installation Locale
-
-```bash
-# Créer un environnement virtuel
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-
-# Installer les dépendances
-pip install -r requirements.txt
-
-# Configurer l'environnement
-cp .env.example .env
-
-# Lancer l'application
-python main.py
-```
-
 ## 📚 Documentation
 
-- [**DEPLOYMENT.md**](./DEPLOYMENT.md) - Guide de déploiement complet (Docker, Heroku, AWS, Linux)
-- [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Guide de contribution et standards de code
-- [**config.yaml**](./config.yaml) - Configuration de l'application
+- [**Spécifications**](./docs/specifications.md) - Détails fonctionnels et techniques
+- [**Architecture**](./docs/architecture.md) - Schémas et pipeline
+- [**Comparatif Tech**](./docs/comparatif_tech.md) - Étude des solutions STT/MT/TTS
+- [**Conformité RGPD**](./docs/rgpd_dpia.md) - Gestion des données sensibles
 
-## 🔌 API Endpoints
+## 🔌 API Endpoints (Principaux)
 
-### Santé de l'application
+### Santé et Statut
 ```bash
 GET /health
 ```
 
-### Gestion des tâches
+### Gestion du Doublage
 ```bash
-POST /task/create          # Créer une nouvelle tâche
-GET  /task/{task_id}       # Récupérer une tâche
-GET  /tasks                # Lister toutes les tâches
-POST /execute?task_id=...  # Exécuter une tâche
+POST /task/create          # Lancer un nouveau projet de doublage
+POST /upload/chunk         # Upload sécurisé de gros fichiers
+GET  /projects             # Liste des projets en cours
+GET  /task/{task_id}       # Statut et métriques (WER/MOS)
 ```
 
-## 🛠️ Technologies
+## 📋 Roadmap
 
-- **FastAPI** - Framework web moderne
-- **Python 3.11** - Language de programmation
-- **Docker** - Containerisation
-- **Redis** - Cache et state management
-- **OpenAI/Anthropic** - Modèles IA
-- **SQLite/PostgreSQL** - Base de données
+- [x] Phase 1 : Spécifications et Architecture
+- [ ] Phase 2 : Prototype ML (STT, MT, TTS, LipSync)
+- [ ] Phase 3 : Backend (Upload chunking, Pipeline)
+- [ ] Phase 4 : Frontend & UX (React, OAuth)
+- [ ] Phase 5 : Intégration et Tests de Charge
+- [ ] Phase 6 : Déploiement Cloud & CDN
 
-## 📋 Structure du Projet
+## 🛡️ Sécurité et Confidentialité
 
-```
-agent-ia-otonome/
-├── main.py                 # Application principale
-├── config.yaml             # Configuration
-├── requirements.txt        # Dépendances Python
-├── Dockerfile              # Configuration Docker
-├── docker-compose.yml      # Orchestration services
-├── tests/                  # Tests unitaires
-├── DEPLOYMENT.md           # Guide de déploiement
-├── CONTRIBUTING.md         # Guide de contribution
-└── .github/
-    └── workflows/
-        └── deploy.yml      # Workflow CI/CD (à créer manuellement)
-```
-
-## 🔐 Configuration
-
-Voir le fichier `.env.example` pour les variables d'environnement requises:
-
-```bash
-DEPLOYMENT_ENV=production
-OPENAI_API_KEY=your_key
-ANTHROPIC_API_KEY=your_key
-REDIS_URL=redis://localhost:6379/0
-DATABASE_URL=sqlite:///./agent.db
-```
-
-## 🧪 Tests
-
-```bash
-# Exécuter tous les tests
-pytest tests/ -v
-
-# Avec couverture de code
-pytest tests/ --cov=. --cov-report=html
-```
-
-## 🌳 Branches
-
-- **main** - Production (déploiement automatique)
-- **develop** - Développement
-- **feature/*** - Nouvelles fonctionnalités
-- **bugfix/*** - Corrections de bugs
-
-## 📊 Monitoring
-
-L'application expose des métriques Prometheus sur le port `9090`:
-```bash
-curl http://localhost:9090/metrics
-```
-
-## 🆘 Dépannage
-
-### L'application ne démarre pas
-```bash
-# Vérifier les logs
-docker-compose logs agent
-
-# Vérifier la configuration
-cat .env
-```
-
-### Erreur de connexion Redis
-```bash
-# Redémarrer Redis
-docker-compose restart redis
-```
-
-## 📝 Logs
-
-Les logs sont stockés dans `logs/agent.log` et affichés en temps réel:
-```bash
-docker-compose logs -f agent
-```
-
-## 🤝 Contribuer
-
-Nous accueillons les contributions! Consultez [CONTRIBUTING.md](./CONTRIBUTING.md) pour:
-- Comment fork le projet
-- Créer des branches
-- Soumettre des pull requests
-- Standards de code
-
-## 📄 Licence
-
-Ce projet est open source. Consultez les détails de licence.
-
-## 🙋 Support
-
-Pour toute question ou problème:
-1. Vérifiez la [documentation](./DEPLOYMENT.md)
-2. Consultez les [issues existantes](https://github.com/lebruntempestriclair-cpu/agent-ia-otonome/issues)
-3. Créez une nouvelle issue avec une description détaillée
-
-## 🎯 Roadmap
-
-- [ ] Implémentation complète de la logique d'exécution
-- [ ] Support multi-modèles IA
-- [ ] Interface web de gestion
-- [ ] Système de plugins
-- [ ] Analytics avancée
-- [ ] Support natif Android/iOS
+Ce projet traite des données biométriques. Nous appliquons les principes de "Privacy by Design" et assurons une transparence totale sur le traitement des données vocales conformément au RGPD.
 
 ---
-
-**Créé avec ❤️ par lebruntempestriclair-cpu**
-
-Prêt pour le déploiement! 🚀
+**Développé pour la révolution du contenu multilingue.**

@@ -64,9 +64,9 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Agent IA Autonome",
-    description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0",
+    title="Plateforme de Doublage Vocal Multilingue",
+    description="Solution autonome de doublage vocal intégrant transcription, traduction et synthèse vocale avec synchronisation labiale.",
+    version="0.1.0",
     lifespan=lifespan
 )
 
@@ -85,6 +85,10 @@ class Task(BaseModel):
     id: Optional[str] = None
     title: str
     description: str
+    source_language: str = "fr"
+    target_language: str = "en"
+    voice_id: str = "alloy"
+    file_url: Optional[str] = None
     priority: int = 1
     status: str = "pending"
 
@@ -112,18 +116,43 @@ async def health_check():
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
-    """Create a new task for the agent"""
+    """Create a new dubbing task"""
     try:
-        logger.info(f"Creating task: {task.title}")
+        logger.info(f"Creating dubbing task: {task.title} ({task.source_language} -> {task.target_language})")
         # TODO: Implement task creation logic
         return TaskResponse(
             success=True,
-            message="Task created successfully",
-            task_id="task_123",
+            message="Dubbing task created successfully",
+            task_id="dub_123",
             status="pending"
         )
     except Exception:
         logger.exception("Error creating task")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/upload/chunk", dependencies=[Depends(verify_api_key)])
+async def upload_chunk(chunk_index: int, total_chunks: int, task_id: str):
+    """Upload a chunk of a large media file"""
+    try:
+        logger.info(f"Receiving chunk {chunk_index}/{total_chunks} for task {task_id}")
+        # TODO: Implement chunk storage logic
+        return {"success": True, "message": f"Chunk {chunk_index} received"}
+    except Exception:
+        logger.exception("Error uploading chunk")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/projects", dependencies=[Depends(verify_api_key)])
+async def list_projects():
+    """List all dubbing projects"""
+    try:
+        logger.info("Listing all dubbing projects")
+        # TODO: Implement projects listing logic
+        return {
+            "projects": [],
+            "total": 0
+        }
+    except Exception:
+        logger.exception("Error listing projects")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/task/{task_id}", dependencies=[Depends(verify_api_key)])
