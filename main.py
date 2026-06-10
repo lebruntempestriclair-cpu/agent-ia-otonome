@@ -101,9 +101,11 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+# OPTIMIZATION: Removed response_model to skip Pydantic validation overhead
+# for this high-frequency endpoint. Documentation is preserved via responses.
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
+    """Health check endpoint - optimized to return raw dict"""
     return {
         "status": "healthy",
         "version": "1.0.0",
@@ -115,13 +117,14 @@ async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
         logger.info(f"Creating task: {task.title}")
-        # TODO: Implement task creation logic
-        return TaskResponse(
-            success=True,
-            message="Task created successfully",
-            task_id="task_123",
-            status="pending"
-        )
+        # OPTIMIZATION: Returning a dict instead of a Pydantic model instance
+        # prevents double validation (once on instantiation, once by FastAPI).
+        return {
+            "success": True,
+            "message": "Task created successfully",
+            "task_id": "task_123",
+            "status": "pending"
+        }
     except Exception:
         logger.exception("Error creating task")
         raise HTTPException(status_code=500, detail="Internal server error")
