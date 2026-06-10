@@ -15,6 +15,27 @@ with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_
 class TestSecurity:
     """Tests for security features"""
 
+    def test_timing_attack_protection(self):
+        """Test that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest", side_effect=lambda a, b: a == b) as mock_compare:
+            headers = {"X-API-Key": "test_secret_key"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 200
+            mock_compare.assert_called()
+
+    def test_cors_wildcard_credentials(self):
+        """Test that CORS does not allow credentials with wildcard origin"""
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": "https://example.com",
+                "Access-Control-Request-Method": "GET",
+            }
+        )
+        assert response.status_code == 200
+        # If allow_credentials is False, Access-Control-Allow-Credentials should not be 'true'
+        assert response.headers.get("Access-Control-Allow-Credentials") != "true"
+
     def test_unauthenticated_access(self):
         """Test that sensitive endpoints require API key when enabled"""
         endpoints = [
