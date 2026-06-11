@@ -1,9 +1,9 @@
-# Configuration for Agent IA Autonome
+# Configuration for Agent IA Autonome - Multilingual Dubbing Platform
 
 app:
-  name: "Agent IA Autonome"
-  version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  name: "Agent IA Autonome Dubbing"
+  version: "1.1.0"
+  description: "Autonomous AI agent for high-quality multilingual video dubbing"
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
@@ -15,20 +15,26 @@ server:
 
 logging:
   level: "${LOG_LEVEL:INFO}"
-  format: "json"
+  format: "standard"
   file: "logs/agent.log"
 
 ai:
   providers:
-    openai:
-      api_key: "${OPENAI_API_KEY:}"
-      model: "gpt-4"
-      temperature: 0.7
-      max_tokens: 2000
-    anthropic:
-      api_key: "${ANTHROPIC_API_KEY:}"
-      model: "claude-3"
-      temperature: 0.7
+    stt:
+      provider: "openai-whisper" # or google-stt, amazon-transcribe
+      model: "large-v3"
+      language_detection: true
+    mt:
+      provider: "deepl" # or google-translate, microsoft-translator
+      api_key: "${DEEPL_API_KEY:}"
+      formality: "prefer_formal"
+    tts:
+      provider: "google-tts" # or amazon-polly, azure-tts, elevenlabs
+      ssml_enabled: true
+      sampling_rate: 24000
+    lipsync:
+      model: "wav2lip-hq"
+      gpu_enabled: true
 
 database:
   url: "${DATABASE_URL:sqlite:///./agent.db}"
@@ -42,17 +48,27 @@ cache:
 
 tasks:
   max_concurrent: 10
-  timeout: 300
+  timeout: 3600 # 1 hour for long video processing
   retry_attempts: 3
-  retry_delay: 5
+  retry_delay: 10
+  chunk_size_mb: 5 # Default chunk size for uploads
 
 security:
-  require_api_key: false
-  cors_origins:
-    - "*"
-  request_timeout: 30
+  require_api_key: "${REQUIRE_API_KEY:false}"
+  api_key: "${API_KEY:default_secret_key}"
+  cors_origins: "${CORS_ORIGINS:*}"
+  request_timeout: 60
+  tls_min_version: "TLSv1.2"
+  gdpr_compliance:
+    enabled: true
+    data_retention_days: 30
+    consent_required: true
 
 monitoring:
   enabled: true
   prometheus_port: 9090
   health_check_interval: 30
+  metrics:
+    - wer # Word Error Rate
+    - mos # Mean Opinion Score
+    - latency
