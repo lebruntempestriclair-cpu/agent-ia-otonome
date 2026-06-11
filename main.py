@@ -6,6 +6,7 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,7 +44,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -74,7 +75,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # Wildcard origins do not support credentials
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -101,27 +102,28 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
+    """Health check endpoint - returning raw dict for performance"""
     return {
         "status": "healthy",
         "version": "1.0.0",
         "environment": settings.DEPLOYMENT_ENV
     }
 
-@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
+@app.post("/task/create", responses={200: {"model": TaskResponse}}, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
         logger.info(f"Creating task: {task.title}")
         # TODO: Implement task creation logic
-        return TaskResponse(
-            success=True,
-            message="Task created successfully",
-            task_id="task_123",
-            status="pending"
-        )
+        # Optimized to return raw dict and avoid Pydantic double-validation
+        return {
+            "success": True,
+            "message": "Task created successfully",
+            "task_id": "task_123",
+            "status": "pending"
+        }
     except Exception:
         logger.exception("Error creating task")
         raise HTTPException(status_code=500, detail="Internal server error")
