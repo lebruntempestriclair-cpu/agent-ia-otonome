@@ -5,6 +5,7 @@ Autonomous AI Agent capable of executing tasks on demand
 """
 
 import os
+import secrets
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
@@ -43,7 +44,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,

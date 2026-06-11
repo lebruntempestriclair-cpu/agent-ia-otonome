@@ -47,6 +47,14 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_api_key_uses_compare_digest(self):
+        """Verify that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest", side_effect=lambda a, b: a == b) as mock_compare:
+            headers = {"X-API-Key": "test_secret_key"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 200
+            assert mock_compare.called
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
