@@ -6,13 +6,18 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import secrets
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -27,11 +32,12 @@ class Settings:
     """Cached environment variables to reduce syscall overhead"""
     def __init__(self):
         self.REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
-        self.API_KEY = os.getenv("API_KEY", "default_secret_key")
+        self.API_KEY = os.getenv("API_KEY")
         self.DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "development")
         self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
         self.API_PORT = int(os.getenv("API_PORT", 8000))
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
+        self.CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 
 settings = Settings()
 
@@ -41,9 +47,17 @@ API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def verify_api_key(header_value: str = Security(api_key_header)):
-    """Validate the API key from the header if required"""
+    """Validate the API key from the header if required using constant-time comparison"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        # Security: Fail securely if API_KEY is not configured
+        if not settings.API_KEY:
+            logger.error("REQUIRE_API_KEY is True but API_KEY is not set in environment")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error"
+            )
+
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -71,10 +85,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Security: allow_credentials=True cannot be used with allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=False if "*" in settings.CORS_ORIGINS else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -122,6 +137,8 @@ async def create_task(task: Task):
             task_id="task_123",
             status="pending"
         )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Error creating task")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -137,6 +154,8 @@ async def get_task(task_id: str):
             "status": "pending",
             "progress": 0
         }
+    except HTTPException:
+        raise
     except Exception:
         logger.exception(f"Error retrieving task: {task_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -151,6 +170,8 @@ async def list_tasks():
             "tasks": [],
             "total": 0
         }
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Error listing tasks")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -166,6 +187,8 @@ async def execute_task(task_id: str):
             "message": "Task execution started",
             "task_id": task_id
         }
+    except HTTPException:
+        raise
     except Exception:
         logger.exception(f"Error executing task: {task_id}")
         raise HTTPException(status_code=500, detail="Internal server error")

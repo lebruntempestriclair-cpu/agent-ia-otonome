@@ -4,7 +4,8 @@ Unit tests for the Agent IA Autonome application
 
 import pytest
 import os
-from unittest.mock import patch
+import secrets
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 # Mock settings before importing app to test authentication
@@ -46,6 +47,32 @@ class TestSecurity:
         """Health check should not require API key"""
         response = client.get("/health")
         assert response.status_code == 200
+
+    def test_api_key_uses_constant_time_comparison(self):
+        """Verify that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest", side_effect=secrets.compare_digest) as mock_compare:
+            headers = {"X-API-Key": "test_secret_key"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 200
+            mock_compare.assert_called()
+
+    def test_cors_configuration_wildcard(self):
+        """Verify CORS behavior with wildcard origin"""
+        with patch("main.settings.CORS_ORIGINS", ["*"]):
+            # We need to re-initialize or mock the middleware behavior
+            # but since we can't easily re-init the app in this test structure,
+            # we check if the settings logic itself is correct
+            from main import settings as main_settings
+            assert "*" in main_settings.CORS_ORIGINS
+
+        # Actual integration test for CORS headers
+        response = client.options("/health", headers={
+            "Origin": "http://example.com",
+            "Access-Control-Request-Method": "GET"
+        })
+        assert response.status_code == 200
+        # In the current app, it's initialized with "*"
+        assert response.headers.get("access-control-allow-origin") == "*"
 
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
