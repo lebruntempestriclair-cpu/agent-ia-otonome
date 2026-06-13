@@ -1,9 +1,9 @@
-# Configuration for Agent IA Autonome
+# Configuration for Multilingual Video Dubbing Platform
 
 app:
-  name: "Agent IA Autonome"
+  name: "Multilingual Video Dubbing Platform"
   version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  description: "Autonomous AI system for high-quality video dubbing and lip-sync"
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
@@ -20,15 +20,30 @@ logging:
 
 ai:
   providers:
-    openai:
-      api_key: "${OPENAI_API_KEY:}"
-      model: "gpt-4"
-      temperature: 0.7
-      max_tokens: 2000
-    anthropic:
-      api_key: "${ANTHROPIC_API_KEY:}"
-      model: "claude-3"
-      temperature: 0.7
+    stt:
+      openai_whisper:
+        model: "large-v3"
+        language: "auto"
+      google_cloud_stt:
+        api_key: "${GOOGLE_STT_API_KEY:}"
+        model: "latest_long"
+    mt:
+      deepl:
+        api_key: "${DEEPL_API_KEY:}"
+        formality: "prefer_formal"
+      google_translate:
+        api_key: "${GOOGLE_MT_API_KEY:}"
+    tts:
+      amazon_polly:
+        api_key: "${AWS_SECRET_KEY:}"
+        engine: "neural"
+      azure_tts:
+        api_key: "${AZURE_TTS_KEY:}"
+        region: "eastus"
+    lip_sync:
+      wav2lip:
+        model_path: "checkpoints/wav2lip_gan.pth"
+        fps: 25
 
 database:
   url: "${DATABASE_URL:sqlite:///./agent.db}"
@@ -42,15 +57,16 @@ cache:
 
 tasks:
   max_concurrent: 10
-  timeout: 300
+  timeout: 600
   retry_attempts: 3
-  retry_delay: 5
+  retry_delay: 10
+  chunk_size_mb: 5
 
 security:
   require_api_key: false
   cors_origins:
     - "*"
-  request_timeout: 30
+  request_timeout: 60
 
 monitoring:
   enabled: true

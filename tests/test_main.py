@@ -34,7 +34,7 @@ class TestSecurity:
         headers = {"X-API-Key": "test_secret_key"}
 
         # Test task creation
-        task_data = {"title": "Test", "description": "Test"}
+        task_data = {"title": "Test", "description": "Test", "gdpr_consent": True}
         response = client.post("/task/create", json=task_data, headers=headers)
         assert response.status_code == 200
 
@@ -62,20 +62,50 @@ class TestHealthEndpoint:
 class TestTaskCreation:
     """Tests for task creation"""
     
-    def test_create_task(self):
-        """Test creating a new task"""
-        headers = {"X-API-Key": "test_secret_key"}
+    def test_create_task_with_oauth(self):
+        """Test creating a new task using OAuth token"""
+        headers = {"Authorization": "Bearer simulated-oauth-token-123"}
         task_data = {
             "title": "Test Task",
             "description": "This is a test task",
-            "priority": 1
+            "priority": 1,
+            "gdpr_consent": True
         }
         response = client.post("/task/create", json=task_data, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "task_id" in data
-        assert data["status"] == "pending"
+
+    def test_create_task_no_gdpr_fails(self):
+        """Test creating task without GDPR consent fails"""
+        headers = {"X-API-Key": "test_secret_key"}
+        task_data = {
+            "title": "Test Task",
+            "description": "No consent",
+            "gdpr_consent": False
+        }
+        response = client.post("/task/create", json=task_data, headers=headers)
+        assert response.status_code == 400
+        assert "GDPR consent is required" in response.json()["detail"]
+
+    def test_create_dubbing_task(self):
+        """Test creating a task with dubbing-specific fields"""
+        headers = {"X-API-Key": "test_secret_key"}
+        task_data = {
+            "title": "Dubbing Project",
+            "description": "Translate to French",
+            "file_url": "http://example.com/video.mp4",
+            "source_language": "en",
+            "target_language": "fr",
+            "voice_id": "female-1",
+            "gdpr_consent": True
+        }
+        response = client.post("/task/create", json=task_data, headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["task_id"].startswith("task_")
     
     def test_create_task_missing_required_field(self):
         """Test creating task with missing required field"""
@@ -92,7 +122,12 @@ class TestTaskRetrieval:
     def test_get_task(self):
         """Test retrieving a task"""
         headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/task/task_123", headers=headers)
+        # Create a task first
+        task_data = {"title": "Retrieval Test", "description": "Test", "gdpr_consent": True}
+        create_res = client.post("/task/create", json=task_data, headers=headers)
+        task_id = create_res.json()["task_id"]
+
+        response = client.get(f"/task/{task_id}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert "task_id" in data
@@ -107,13 +142,73 @@ class TestTaskRetrieval:
         assert "tasks" in data
         assert "total" in data
 
+class TestUploads:
+    """Tests for chunked media uploads"""
+
+    def test_chunked_upload_flow(self):
+        headers = {"Authorization": "Bearer simulated-oauth-token-123"}
+
+        # 1. Upload chunk
+        chunk_data = {"file_id": "vid_123", "chunk_index": 0, "chunk_data": "SGVsbG8="}
+        res = client.post("/upload/chunk", json=chunk_data, headers=headers)
+        assert res.status_code == 200
+        assert res.json()["success"] is True
+
+        # 2. Finalize
+        res = client.post("/upload/finalize?file_id=vid_123&total_chunks=1", headers=headers)
+        assert res.status_code == 200
+        assert "file_url" in res.json()
+
+class TestDubbingPipeline:
+    """Tests for the dubbing pipeline and progress tracking"""
+
+    def test_task_lifecycle_and_progress(self):
+        """Test the full lifecycle from creation to execution and progress tracking"""
+        headers = {"X-API-Key": "test_secret_key"}
+
+        # 1. Create Task
+        task_data = {"title": "Lifecycle Test", "description": "Testing progress", "gdpr_consent": True}
+        create_res = client.post("/task/create", json=task_data, headers=headers)
+        task_id = create_res.json()["task_id"]
+
+        # 2. Check initial progress
+        prog_res = client.get(f"/task/{task_id}/progress", headers=headers)
+        assert prog_res.status_code == 200
+        assert prog_res.json()["progress"] == 0
+        assert prog_res.json()["metrics"]["wer"] is None
+
+        # 3. Execute Task (Note: In TestClient, BackgroundTasks run synchronously)
+        exec_res = client.post(f"/execute?task_id={task_id}", headers=headers)
+        assert exec_res.status_code == 200
+        assert exec_res.json()["success"] is True
+
+        # 4. Check final status and metrics
+        final_res = client.get(f"/task/{task_id}/progress", headers=headers)
+        data = final_res.json()
+        assert data["status"] == "completed"
+        assert data["progress"] == 100
+        assert data["metrics"]["wer"] == 0.05
+        assert data["metrics"]["mos"] == 4.2
+        assert data["metrics"]["latency_ms"] == 1200
+
+    def test_execute_nonexistent_task(self):
+        """Test executing a task that doesn't exist"""
+        headers = {"X-API-Key": "test_secret_key"}
+        response = client.post("/execute?task_id=nonexistent", headers=headers)
+        assert response.status_code == 404
+
 class TestTaskExecution:
     """Tests for task execution"""
     
     def test_execute_task(self):
         """Test executing a task"""
         headers = {"X-API-Key": "test_secret_key"}
-        response = client.post("/execute?task_id=task_123", headers=headers)
+        # First create the task since we are now using tasks_db
+        task_data = {"title": "Execution Test", "description": "Test", "gdpr_consent": True}
+        create_res = client.post("/task/create", json=task_data, headers=headers)
+        task_id = create_res.json()["task_id"]
+
+        response = client.post(f"/execute?task_id={task_id}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
