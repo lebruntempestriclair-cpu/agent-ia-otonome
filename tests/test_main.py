@@ -8,8 +8,12 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Mock settings before importing app to test authentication
+# We need to mock BEFORE the app or Settings class is loaded/initialized
 with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
+    import main
+    # Re-initialize settings in main to use the mocked environment
+    main.settings = main.Settings()
+    app = main.app
     client = TestClient(app)
 
 class TestSecurity:
@@ -46,6 +50,27 @@ class TestSecurity:
         """Health check should not require API key"""
         response = client.get("/health")
         assert response.status_code == 200
+
+    def test_timing_attack_protection(self):
+        """Verify that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest", return_value=True) as mock_compare:
+            headers = {"X-API-Key": "some_key"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 200
+            mock_compare.assert_called_once_with("some_key", "test_secret_key")
+
+    def test_secure_fail_missing_api_key_config(self):
+        """Test that it fails with 500 if REQUIRE_API_KEY is true but API_KEY is not set"""
+        # We need to temporarily modify settings for this test
+        original_api_key = main.settings.API_KEY
+        main.settings.API_KEY = None
+        try:
+            headers = {"X-API-Key": "any"}
+            response = client.get("/tasks", headers=headers)
+            assert response.status_code == 500
+            assert response.json() == {"detail": "Internal server error"}
+        finally:
+            main.settings.API_KEY = original_api_key
 
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
