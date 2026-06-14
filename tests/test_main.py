@@ -47,6 +47,14 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_timing_attack_protection(self):
+        """Verify that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest", return_value=True) as mock_compare:
+            headers = {"X-API-Key": "some_key"}
+            client.get("/tasks", headers=headers)
+            # Verify compare_digest was called
+            assert mock_compare.called
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
