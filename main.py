@@ -103,7 +103,7 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
+    """Health check endpoint - returns raw dict to avoid redundant instantiation"""
     return {
         "status": "healthy",
         "version": "1.0.0",
@@ -112,16 +112,16 @@ async def health_check():
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
-    """Create a new task for the agent"""
+    """Create a new task for the agent - returns raw dict to avoid redundant instantiation"""
     try:
-        logger.info(f"Creating task: {task.title}")
+        logger.info("Creating task: %s", task.title)
         # TODO: Implement task creation logic
-        return TaskResponse(
-            success=True,
-            message="Task created successfully",
-            task_id="task_123",
-            status="pending"
-        )
+        return {
+            "success": True,
+            "message": "Task created successfully",
+            "task_id": "task_123",
+            "status": "pending"
+        }
     except Exception:
         logger.exception("Error creating task")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -130,7 +130,7 @@ async def create_task(task: Task):
 async def get_task(task_id: str):
     """Get task status"""
     try:
-        logger.info(f"Fetching task: {task_id}")
+        logger.info("Fetching task: %s", task_id)
         # TODO: Implement task retrieval logic
         return {
             "task_id": task_id,
@@ -138,7 +138,7 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception:
-        logger.exception(f"Error retrieving task: {task_id}")
+        logger.exception("Error retrieving task: %s", task_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/tasks", dependencies=[Depends(verify_api_key)])
@@ -159,7 +159,7 @@ async def list_tasks():
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
-        logger.info(f"Executing task: {task_id}")
+        logger.info("Executing task: %s", task_id)
         # TODO: Implement task execution logic
         return {
             "success": True,
@@ -167,7 +167,7 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception:
-        logger.exception(f"Error executing task: {task_id}")
+        logger.exception("Error executing task: %s", task_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Main ============
