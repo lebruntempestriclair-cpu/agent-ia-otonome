@@ -1,0 +1,4 @@
+## 2025-05-15 - Timing Attack and Insecure Default API Key
+**Vulnerability:** The application used standard string comparison (`==`) for API key validation, which is vulnerable to timing attacks. Additionally, it allowed the use of a hardcoded default API key (`default_secret_key`) even when authentication was explicitly required.
+**Learning:** Timing attacks allow an attacker to infer the correct secret by measuring small differences in response times. Using insecure defaults can lead to accidental exposure if the environment is not correctly configured before deployment.
+**Prevention:** Always use `secrets.compare_digest` for constant-time comparison of security tokens. Implement "fail-secure" checks that prevent the application from starting or serving requests if critical security configuration (like a production-grade API key) is missing or set to a known insecure default.

@@ -5,6 +5,7 @@ Autonomous AI Agent capable of executing tasks on demand
 """
 
 import os
+import secrets
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
@@ -43,7 +44,15 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        # Prevent usage of insecure default API key in production
+        if settings.API_KEY == "default_secret_key":
+            logger.error("API_KEY environment variable is not set or using insecure default!")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal Server Error: Secure authentication not configured"
+            )
+
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
