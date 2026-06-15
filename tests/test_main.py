@@ -47,6 +47,22 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_insecure_default_key_fails(self):
+        """Test that using the default API key when required fails with 500"""
+        with patch("main.settings.API_KEY", "default_secret_key"):
+            with patch("main.settings.REQUIRE_API_KEY", True):
+                response = client.get("/tasks", headers={"X-API-Key": "default_secret_key"})
+                assert response.status_code == 500
+                assert "Secure authentication not configured" in response.json()["detail"]
+
+    def test_constant_time_comparison_used(self):
+        """Test that secrets.compare_digest is used for API key validation"""
+        with patch("secrets.compare_digest") as mock_compare:
+            mock_compare.return_value = True
+            headers = {"X-API-Key": "test_secret_key"}
+            client.get("/tasks", headers=headers)
+            assert mock_compare.called
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
