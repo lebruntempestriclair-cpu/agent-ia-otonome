@@ -6,8 +6,10 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, Security, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -21,6 +23,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Load environment variables from .env if present
+load_dotenv()
+
 # ============ Settings ============
 
 class Settings:
@@ -32,6 +37,7 @@ class Settings:
         self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
         self.API_PORT = int(os.getenv("API_PORT", 8000))
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
+        self.CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 
 settings = Settings()
 
@@ -43,7 +49,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -70,10 +76,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
