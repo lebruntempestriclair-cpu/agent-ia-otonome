@@ -1,15 +1,16 @@
-# 🤖 Agent IA Autonome
+# 🎙️ Plateforme de Doublage Vocal Multilingue
 
-Agent IA autonome capable d'accomplir, de faire fonctionner, d'entrer et de sélectionner des tâches à accomplir à la demande du créateur.
+Solution de pointe pour le doublage automatique de contenus vidéo et audio utilisant l'IA.
 
 ## ✨ Fonctionnalités
 
-- 🎯 **Exécution autonome de tâches** - L'agent exécute automatiquement les tâches demandées
-- 🔄 **Gestion d'état persistant** - Sauvegarde et récupération de l'état de l'agent
-- 🚀 **API REST complète** - Interface HTTP pour interagir avec l'agent
-- 📊 **Monitoring en temps réel** - Suivi de l'exécution des tâches
-- 🐳 **Containerisé** - Prêt pour le déploiement avec Docker
-- 🧪 **Complètement testé** - Suite de tests unitaires complète
+- 📤 **Upload Volumineux & Chunké** - Support des fichiers de 10 Mo à 700 Mo+ avec reprise sur erreur.
+- 🗣️ **Transcription (STT)** - Extraction précise du texte via Whisper ou services Cloud.
+- 🌍 **Traduction (MT)** - Traduction contextuelle haute qualité (DeepL, Google).
+- 🎙️ **Synthèse Vocale (TTS)** - Voix naturelles avec contrôle de la prosodie et SSML.
+- 👄 **Synchronisation Labiale** - Alignement automatique (Wav2Lip) pour un rendu réaliste.
+- ⚡ **Pipeline Asynchrone** - Architecture microservices scalable.
+- 🔐 **Sécurité & RGPD** - Authentification OAuth, chiffrement TLS et gestion des données sensibles.
 
 ## 🚀 Démarrage Rapide
 
@@ -17,12 +18,12 @@ Agent IA autonome capable d'accomplir, de faire fonctionner, d'entrer et de sél
 
 ```bash
 # Cloner le repository
-git clone https://github.com/lebruntempestriclair-cpu/agent-ia-otonome.git
-cd agent-ia-otonome
+git clone https://github.com/lebruntempestriclair-cpu/dubbing-platform.git
+cd dubbing-platform
 
 # Configurer l'environnement
 cp .env.example .env
-# Éditer .env avec vos clés API
+# Éditer .env avec vos clés API (OpenAI, DeepL, etc.)
 
 # Démarrer l'application
 docker-compose up -d
@@ -36,9 +37,7 @@ curl http://localhost:8000/health
 ```bash
 # Créer un environnement virtuel
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
+source venv/bin/activate
 
 # Installer les dépendances
 pip install -r requirements.txt
@@ -52,141 +51,39 @@ python main.py
 
 ## 📚 Documentation
 
-- [**DEPLOYMENT.md**](./DEPLOYMENT.md) - Guide de déploiement complet (Docker, Heroku, AWS, Linux)
-- [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Guide de contribution et standards de code
-- [**config.yaml**](./config.yaml) - Configuration de l'application
+- [**ARCHITECTURE.md**](./ARCHITECTURE.md) - Architecture détaillée du pipeline
+- [**DEPLOYMENT.md**](./DEPLOYMENT.md) - Guide de déploiement Cloud
+- [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Standards de développement
 
-## 🔌 API Endpoints
+## 🔌 API Principale
 
-### Santé de l'application
-```bash
-GET /health
-```
-
-### Gestion des tâches
-```bash
-POST /task/create          # Créer une nouvelle tâche
-GET  /task/{task_id}       # Récupérer une tâche
-GET  /tasks                # Lister toutes les tâches
-POST /execute?task_id=...  # Exécuter une tâche
-```
+- `POST /upload` - Upload de média par chunks
+- `POST /projects` - Création d'un projet de doublage
+- `GET /projects/{id}` - Suivi de l'avancement
+- `GET /results/{id}` - Prévisualisation et métriques (WER, MOS)
 
 ## 🛠️ Technologies
 
-- **FastAPI** - Framework web moderne
-- **Python 3.11** - Language de programmation
-- **Docker** - Containerisation
-- **Redis** - Cache et state management
-- **OpenAI/Anthropic** - Modèles IA
-- **SQLite/PostgreSQL** - Base de données
+- **FastAPI** (Backend)
+- **Redis** (Queue & Cache)
+- **FFmpeg** (Traitement Vidéo)
+- **Wav2Lip** (Lip-Sync)
+- **Docker/K8s** (Orchestration)
 
-## 📋 Structure du Projet
+## 📊 Métriques de Qualité
 
-```
-agent-ia-otonome/
-├── main.py                 # Application principale
-├── config.yaml             # Configuration
-├── requirements.txt        # Dépendances Python
-├── Dockerfile              # Configuration Docker
-├── docker-compose.yml      # Orchestration services
-├── tests/                  # Tests unitaires
-├── DEPLOYMENT.md           # Guide de déploiement
-├── CONTRIBUTING.md         # Guide de contribution
-└── .github/
-    └── workflows/
-        └── deploy.yml      # Workflow CI/CD (à créer manuellement)
-```
+Le système collecte automatiquement :
+- **WER** (Word Error Rate) pour la transcription.
+- **MOS** (Mean Opinion Score) pour la synthèse vocale.
+- **Latence de traitement** par minute de média.
 
-## 🔐 Configuration
+## ⚖️ Conformité RGPD
 
-Voir le fichier `.env.example` pour les variables d'environnement requises:
-
-```bash
-DEPLOYMENT_ENV=production
-OPENAI_API_KEY=your_key
-ANTHROPIC_API_KEY=your_key
-REDIS_URL=redis://localhost:6379/0
-DATABASE_URL=sqlite:///./agent.db
-```
-
-## 🧪 Tests
-
-```bash
-# Exécuter tous les tests
-pytest tests/ -v
-
-# Avec couverture de code
-pytest tests/ --cov=. --cov-report=html
-```
-
-## 🌳 Branches
-
-- **main** - Production (déploiement automatique)
-- **develop** - Développement
-- **feature/*** - Nouvelles fonctionnalités
-- **bugfix/*** - Corrections de bugs
-
-## 📊 Monitoring
-
-L'application expose des métriques Prometheus sur le port `9090`:
-```bash
-curl http://localhost:9090/metrics
-```
-
-## 🆘 Dépannage
-
-### L'application ne démarre pas
-```bash
-# Vérifier les logs
-docker-compose logs agent
-
-# Vérifier la configuration
-cat .env
-```
-
-### Erreur de connexion Redis
-```bash
-# Redémarrer Redis
-docker-compose restart redis
-```
-
-## 📝 Logs
-
-Les logs sont stockés dans `logs/agent.log` et affichés en temps réel:
-```bash
-docker-compose logs -f agent
-```
-
-## 🤝 Contribuer
-
-Nous accueillons les contributions! Consultez [CONTRIBUTING.md](./CONTRIBUTING.md) pour:
-- Comment fork le projet
-- Créer des branches
-- Soumettre des pull requests
-- Standards de code
-
-## 📄 Licence
-
-Ce projet est open source. Consultez les détails de licence.
-
-## 🙋 Support
-
-Pour toute question ou problème:
-1. Vérifiez la [documentation](./DEPLOYMENT.md)
-2. Consultez les [issues existantes](https://github.com/lebruntempestriclair-cpu/agent-ia-otonome/issues)
-3. Créez une nouvelle issue avec une description détaillée
-
-## 🎯 Roadmap
-
-- [ ] Implémentation complète de la logique d'exécution
-- [ ] Support multi-modèles IA
-- [ ] Interface web de gestion
-- [ ] Système de plugins
-- [ ] Analytics avancée
-- [ ] Support natif Android/iOS
+La voix est une donnée biométrique. Le système inclut :
+- Consentement explicite à l'upload.
+- Chiffrement au repos (AES-256).
+- Suppression automatique après traitement.
 
 ---
 
-**Créé avec ❤️ par lebruntempestriclair-cpu**
-
-Prêt pour le déploiement! 🚀
+**Développé pour l'excellence en doublage IA.** 🚀
