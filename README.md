@@ -1,192 +1,82 @@
-# 🤖 Agent IA Autonome
+# 🌍 Multilingual Voice Dubbing Platform
 
-Agent IA autonome capable d'accomplir, de faire fonctionner, d'entrer et de sélectionner des tâches à accomplir à la demande du créateur.
+Automated high-quality video translation and dubbing platform using state-of-the-art AI services.
 
-## ✨ Fonctionnalités
+## ✨ Key Features
 
-- 🎯 **Exécution autonome de tâches** - L'agent exécute automatiquement les tâches demandées
-- 🔄 **Gestion d'état persistant** - Sauvegarde et récupération de l'état de l'agent
-- 🚀 **API REST complète** - Interface HTTP pour interagir avec l'agent
-- 📊 **Monitoring en temps réel** - Suivi de l'exécution des tâches
-- 🐳 **Containerisé** - Prêt pour le déploiement avec Docker
-- 🧪 **Complètement testé** - Suite de tests unitaires complète
+- 📽️ **Large File Upload** - Support for files up to 700MB+ via chunked uploads.
+- 🗣️ **AI-Powered Pipeline** - STT → MT → TTS → Lip-Sync (Wav2Lip).
+- 🌐 **Multilingual Support** - Seamless translation across 50+ languages.
+- 🛡️ **GDPR Compliant** - Explicit biometric consent management and data retention policies.
+- 🚀 **Scalable Architecture** - Microservices-ready design for cloud deployment.
+- 🔒 **Security First** - TLS, security headers, and API Key authentication.
 
-## 🚀 Démarrage Rapide
+## 🚀 Quick Start
 
-### Avec Docker (Recommandé)
+### Installation
 
 ```bash
-# Cloner le repository
+# Clone the repository
 git clone https://github.com/lebruntempestriclair-cpu/agent-ia-otonome.git
 cd agent-ia-otonome
 
-# Configurer l'environnement
-cp .env.example .env
-# Éditer .env avec vos clés API
-
-# Démarrer l'application
-docker-compose up -d
-
-# Accéder à l'API
-curl http://localhost:8000/health
-```
-
-### Installation Locale
-
-```bash
-# Créer un environnement virtuel
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-
-# Installer les dépendances
+# Install dependencies
 pip install -r requirements.txt
+pip install pytest pytest-asyncio httpx==0.24.1  # For testing
 
-# Configurer l'environnement
-cp .env.example .env
-
-# Lancer l'application
+# Run the platform
 python main.py
 ```
 
+### API Documentation
+Once running, access the interactive documentation at:
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+
 ## 📚 Documentation
 
-- [**DEPLOYMENT.md**](./DEPLOYMENT.md) - Guide de déploiement complet (Docker, Heroku, AWS, Linux)
-- [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Guide de contribution et standards de code
-- [**config.yaml**](./config.yaml) - Configuration de l'application
+- [**ARCHITECTURE.md**](./ARCHITECTURE.md) - Deep dive into the pipeline and cloud infrastructure.
+- [**DEPLOYMENT.md**](./DEPLOYMENT.md) - Guide for Docker, AWS, and production setup.
+- [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Code standards and contribution guidelines.
 
-## 🔌 API Endpoints
+## 🔌 Core API Endpoints
 
-### Santé de l'application
+### Chunked Upload
 ```bash
-GET /health
+POST /upload/init      # Initialize upload
+POST /upload/chunk     # Upload file chunk
+POST /upload/complete  # Finalize and merge chunks
 ```
 
-### Gestion des tâches
+### Project Management
 ```bash
-POST /task/create          # Créer une nouvelle tâche
-GET  /task/{task_id}       # Récupérer une tâche
-GET  /tasks                # Lister toutes les tâches
-POST /execute?task_id=...  # Exécuter une tâche
+POST /project/create   # Create a dubbing project
+GET  /project/{id}     # Get project status/progress
+GET  /projects         # List all projects
 ```
 
-## 🛠️ Technologies
+## 🛠️ Technology Stack
 
-- **FastAPI** - Framework web moderne
-- **Python 3.11** - Language de programmation
-- **Docker** - Containerisation
-- **Redis** - Cache et state management
-- **OpenAI/Anthropic** - Modèles IA
-- **SQLite/PostgreSQL** - Base de données
+- **Backend**: FastAPI (Python 3.11+)
+- **Storage**: S3-compatible Object Storage
+- **AI Services**: OpenAI Whisper, DeepL, Google TTS, Wav2Lip
+- **Containerization**: Docker & Kubernetes
+- **Monitoring**: Prometheus & Grafana
 
-## 📋 Structure du Projet
-
-```
-agent-ia-otonome/
-├── main.py                 # Application principale
-├── config.yaml             # Configuration
-├── requirements.txt        # Dépendances Python
-├── Dockerfile              # Configuration Docker
-├── docker-compose.yml      # Orchestration services
-├── tests/                  # Tests unitaires
-├── DEPLOYMENT.md           # Guide de déploiement
-├── CONTRIBUTING.md         # Guide de contribution
-└── .github/
-    └── workflows/
-        └── deploy.yml      # Workflow CI/CD (à créer manuellement)
-```
-
-## 🔐 Configuration
-
-Voir le fichier `.env.example` pour les variables d'environnement requises:
+## 🧪 Testing
 
 ```bash
-DEPLOYMENT_ENV=production
-OPENAI_API_KEY=your_key
-ANTHROPIC_API_KEY=your_key
-REDIS_URL=redis://localhost:6379/0
-DATABASE_URL=sqlite:///./agent.db
+# Run all tests
+python3 -m pytest
 ```
 
-## 🧪 Tests
+## 🛡️ Security & Privacy
 
-```bash
-# Exécuter tous les tests
-pytest tests/ -v
-
-# Avec couverture de code
-pytest tests/ --cov=. --cov-report=html
-```
-
-## 🌳 Branches
-
-- **main** - Production (déploiement automatique)
-- **develop** - Développement
-- **feature/*** - Nouvelles fonctionnalités
-- **bugfix/*** - Corrections de bugs
-
-## 📊 Monitoring
-
-L'application expose des métriques Prometheus sur le port `9090`:
-```bash
-curl http://localhost:9090/metrics
-```
-
-## 🆘 Dépannage
-
-### L'application ne démarre pas
-```bash
-# Vérifier les logs
-docker-compose logs agent
-
-# Vérifier la configuration
-cat .env
-```
-
-### Erreur de connexion Redis
-```bash
-# Redémarrer Redis
-docker-compose restart redis
-```
-
-## 📝 Logs
-
-Les logs sont stockés dans `logs/agent.log` et affichés en temps réel:
-```bash
-docker-compose logs -f agent
-```
-
-## 🤝 Contribuer
-
-Nous accueillons les contributions! Consultez [CONTRIBUTING.md](./CONTRIBUTING.md) pour:
-- Comment fork le projet
-- Créer des branches
-- Soumettre des pull requests
-- Standards de code
-
-## 📄 Licence
-
-Ce projet est open source. Consultez les détails de licence.
-
-## 🙋 Support
-
-Pour toute question ou problème:
-1. Vérifiez la [documentation](./DEPLOYMENT.md)
-2. Consultez les [issues existantes](https://github.com/lebruntempestriclair-cpu/agent-ia-otonome/issues)
-3. Créez une nouvelle issue avec une description détaillée
-
-## 🎯 Roadmap
-
-- [ ] Implémentation complète de la logique d'exécution
-- [ ] Support multi-modèles IA
-- [ ] Interface web de gestion
-- [ ] Système de plugins
-- [ ] Analytics avancée
-- [ ] Support natif Android/iOS
+This platform handles sensitive biometric data (voice). We ensure:
+- **Consent**: Explicit user consent before processing.
+- **Encryption**: Data encrypted at rest and in transit.
+- **Retention**: Limited data storage duration as per GDPR.
 
 ---
 
-**Créé avec ❤️ par lebruntempestriclair-cpu**
-
-Prêt pour le déploiement! 🚀
+**Built with ❤️ for global communication.**
