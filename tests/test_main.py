@@ -47,6 +47,23 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_security_headers_present(self):
+        """Test that security headers are correctly set in responses"""
+        response = client.get("/health")
+        assert response.headers["Content-Security-Policy"] == "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert response.headers["X-XSS-Protection"] == "1; mode=block"
+
+    def test_cors_headers_default(self):
+        """Verify default CORS headers (should allow any origin when set to *)"""
+        response = client.options("/health", headers={
+            "Origin": "http://example.com",
+            "Access-Control-Request-Method": "GET"
+        })
+        assert response.headers.get("access-control-allow-origin") == "http://example.com"
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
