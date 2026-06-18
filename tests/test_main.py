@@ -1,123 +1,100 @@
 """
-Unit tests for the Agent IA Autonome application
+Unit tests for the Multilingual Voice Dubbing Platform
 """
 
 import pytest
 import os
+import io
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-# Mock settings before importing app to test authentication
-with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
-    client = TestClient(app)
+# Import app after patching environment if needed
+from main import app, settings
 
-class TestSecurity:
-    """Tests for security features"""
+client = TestClient(app)
 
-    def test_unauthenticated_access(self):
-        """Test that sensitive endpoints require API key when enabled"""
-        endpoints = [
-            ("/task/create", "post"),
-            ("/task/task_123", "get"),
-            ("/tasks", "get"),
-            ("/execute?task_id=task_123", "post")
-        ]
-        for url, method in endpoints:
-            func = getattr(client, method)
-            response = func(url)
-            assert response.status_code == 403
-            assert response.json() == {"detail": "Could not validate credentials"}
+def test_health_check():
+    """Health check should be public and return 200"""
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
 
-    def test_authenticated_access(self):
-        """Test that sensitive endpoints allow access with valid API key"""
-        headers = {"X-API-Key": "test_secret_key"}
+def test_security_headers():
+    """Verify that security headers are present"""
+    response = client.get("/health")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert "Strict-Transport-Security" in response.headers
+    assert "Content-Security-Policy" in response.headers
 
-        # Test task creation
-        task_data = {"title": "Test", "description": "Test"}
-        response = client.post("/task/create", json=task_data, headers=headers)
-        assert response.status_code == 200
+def test_upload_flow():
+    """Test the basic upload initialization and consent requirement"""
+    # 1. Init Upload
+    response = client.post("/upload/init")
+    assert response.status_code == 200
+    upload_id = response.json()["upload_id"]
+    assert upload_id is not None
 
-        # Test list tasks
-        response = client.get("/tasks", headers=headers)
-        assert response.status_code == 200
+    # 2. Upload Chunk
+    file_content = b"test content"
+    file = io.BytesIO(file_content)
+    response = client.post(
+        "/upload/chunk",
+        data={"upload_id": upload_id, "chunk_index": 0},
+        files={"file": ("test.mp4", file, "video/mp4")}
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
 
-    def test_health_check_remains_public(self):
-        """Health check should not require API key"""
-        response = client.get("/health")
-        assert response.status_code == 200
-
-class TestHealthEndpoint:
-    """Tests for the health check endpoint"""
-    
-    def test_health_check(self):
-        """Test health check returns 200 and correct structure"""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert "version" in data
-        assert "environment" in data
-
-class TestTaskCreation:
-    """Tests for task creation"""
-    
-    def test_create_task(self):
-        """Test creating a new task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        task_data = {
-            "title": "Test Task",
-            "description": "This is a test task",
-            "priority": 1
+    # 3. Complete Upload without consent
+    response = client.post(
+        "/upload/complete",
+        data={
+            "upload_id": upload_id,
+            "total_chunks": 1,
+            "filename": "test.mp4",
+            "title": "Test Project",
+            "source_language": "en",
+            "target_language": "fr",
+            "voice_id": "voice_1",
+            "consent_given": False
         }
-        response = client.post("/task/create", json=task_data, headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "task_id" in data
-        assert data["status"] == "pending"
-    
-    def test_create_task_missing_required_field(self):
-        """Test creating task with missing required field"""
-        headers = {"X-API-Key": "test_secret_key"}
-        task_data = {
-            "description": "Missing title"
+    )
+    assert response.status_code == 400
+    assert "consent" in response.json()["detail"].lower()
+
+    # 4. Complete Upload with consent
+    # Re-upload chunk because assemble_chunks cleans up
+    file = io.BytesIO(file_content)
+    client.post(
+        "/upload/chunk",
+        data={"upload_id": upload_id, "chunk_index": 0},
+        files={"file": ("test.mp4", file, "video/mp4")}
+    )
+
+    response = client.post(
+        "/upload/complete",
+        data={
+            "upload_id": upload_id,
+            "total_chunks": 1,
+            "filename": "test.mp4",
+            "title": "Test Project",
+            "source_language": "en",
+            "target_language": "fr",
+            "voice_id": "voice_1",
+            "consent_given": True
         }
-        response = client.post("/task/create", json=task_data, headers=headers)
-        assert response.status_code == 422  # Validation error
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+    assert "project_id" in response.json()
 
-class TestTaskRetrieval:
-    """Tests for task retrieval"""
-    
-    def test_get_task(self):
-        """Test retrieving a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/task/task_123", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert "task_id" in data
-        assert "status" in data
-    
-    def test_list_tasks(self):
-        """Test listing all tasks"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/tasks", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert "tasks" in data
-        assert "total" in data
-
-class TestTaskExecution:
-    """Tests for task execution"""
-    
-    def test_execute_task(self):
-        """Test executing a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.post("/execute?task_id=task_123", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "message" in data
+def test_get_project_status():
+    """Test getting project status"""
+    response = client.get("/project/some-id")
+    assert response.status_code == 200
+    assert response.json()["id"] == "some-id"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

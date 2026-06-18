@@ -1,58 +1,57 @@
-# Configuration for Agent IA Autonome
+# Configuration for Multilingual Voice Dubbing Platform
 
 app:
-  name: "Agent IA Autonome"
+  name: "Multilingual Voice Dubbing Platform"
   version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  description: "Automated video translation and voice dubbing platform"
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
   host: "${API_HOST:0.0.0.0}"
   port: "${API_PORT:8000}"
-  workers: "${API_WORKERS:4}"
+  workers: "${API_WORKERS:1}"
   reload: true
   debug: "${DEBUG:false}"
 
 logging:
   level: "${LOG_LEVEL:INFO}"
   format: "json"
-  file: "logs/agent.log"
+  file: "logs/dubbing.log"
 
 ai:
-  providers:
-    openai:
-      api_key: "${OPENAI_API_KEY:}"
-      model: "gpt-4"
-      temperature: 0.7
-      max_tokens: 2000
-    anthropic:
-      api_key: "${ANTHROPIC_API_KEY:}"
-      model: "claude-3"
-      temperature: 0.7
+  stt:
+    provider: "whisper" # whisper, google, azure
+    model: "base"
+  mt:
+    provider: "deepl" # deepl, google, azure
+    api_key: "${DEEPL_API_KEY:}"
+  tts:
+    provider: "azure" # azure, google, amazon
+    voice_name: "en-US-JennyNeural"
+  lipsync:
+    model: "wav2lip"
 
 database:
-  url: "${DATABASE_URL:sqlite:///./agent.db}"
+  url: "${DATABASE_URL:sqlite:///./dubbing.db}"
   echo: false
-  pool_size: 10
-  max_overflow: 20
 
 cache:
   redis_url: "${REDIS_URL:redis://localhost:6379/0}"
   ttl: 3600
 
-tasks:
-  max_concurrent: 10
-  timeout: 300
-  retry_attempts: 3
-  retry_delay: 5
+upload:
+  max_size_mb: 1000
+  chunk_size_mb: 5
+  temp_dir: "uploads/temp"
+  final_dir: "uploads/final"
 
 security:
-  require_api_key: false
+  require_api_key: "${REQUIRE_API_KEY:false}"
   cors_origins:
     - "*"
-  request_timeout: 30
+  request_timeout: 60
+  jwt_secret: "${JWT_SECRET:changeme}"
 
 monitoring:
   enabled: true
   prometheus_port: 9090
-  health_check_interval: 30
