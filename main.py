@@ -1,22 +1,57 @@
 #!/usr/bin/env python3
 """
-Agent IA Autonome - Main Application
-Autonomous AI Agent capable of executing tasks on demand
+Multilingual Voice Dubbing Platform - Main Application
 """
 
 import os
+import uuid
 import logging
+import yaml
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import APIKeyHeader
-from pydantic import BaseModel
 from typing import Optional, List
+from fastapi import FastAPI, HTTPException, Depends, Security, UploadFile, File, Form, BackgroundTasks, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
+from models.schemas import Project, ProjectCreate, HealthResponse
+from utils.upload_handler import save_chunk, assemble_chunks
+from services.pipeline import run_dubbing_pipeline
+
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
+
+# Load config
+with open("config.yaml", "r") as f:
+    config_raw = f.read()
+    # Basic env var substitution for the config
+    for key, value in os.environ.items():
+        config_raw = config_raw.replace(f"${{{key}}}", value)
+    config = yaml.safe_load(config_raw)
+
+# Simple fallback for env vars that weren't replaced (use defaults if specified in config)
+def resolve_config(config_dict):
+    for key, value in config_dict.items():
+        if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+            # Extract default if present: ${VAR:default}
+            parts = value[2:-1].split(":", 1)
+            env_val = os.getenv(parts[0], parts[1] if len(parts) > 1 else "")
+            config_dict[key] = env_val
+        elif isinstance(value, dict):
+            resolve_config(value)
+
+resolve_config(config)
+
 # Configure logging
+log_level = config['logging']['level']
+if not hasattr(logging, log_level):
+    log_level = "INFO"
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -24,24 +59,26 @@ logger = logging.getLogger(__name__)
 # ============ Settings ============
 
 class Settings:
-    """Cached environment variables to reduce syscall overhead"""
     def __init__(self):
-        self.REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
+        self.REQUIRE_API_KEY = str(config['security']['require_api_key']).lower() == "true"
         self.API_KEY = os.getenv("API_KEY", "default_secret_key")
-        self.DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "development")
-        self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
-        self.API_PORT = int(os.getenv("API_PORT", 8000))
-        self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
+        self.DEPLOYMENT_ENV = config['app']['environment']
+        self.API_HOST = config['server']['host']
+        self.API_PORT = int(config['server']['port'])
+        self.API_WORKERS = int(config['server']['workers'])
+        self.TEMP_DIR = config['upload']['temp_dir']
+        self.FINAL_DIR = config['upload']['final_dir']
 
 settings = Settings()
 
 # ============ Security ============
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def verify_api_key(header_value: str = Security(api_key_header)):
-    """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
         if not header_value or header_value != settings.API_KEY:
             logger.warning("Invalid or missing API key provided")
@@ -51,124 +88,114 @@ async def verify_api_key(header_value: str = Security(api_key_header)):
             )
     return header_value
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        return response
+
 # ============ App Setup ============
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Modern lifespan management for startup and shutdown"""
-    logger.info("Agent IA Autonome starting...")
-    # TODO: Initialize connections, load models, etc.
+    logger.info("Dubbing Platform starting...")
+    os.makedirs(settings.TEMP_DIR, exist_ok=True)
+    os.makedirs(settings.FINAL_DIR, exist_ok=True)
     yield
-    logger.info("Agent IA Autonome shutting down...")
-    # TODO: Close connections, save state, etc.
+    logger.info("Dubbing Platform shutting down...")
 
-# Initialize FastAPI app
 app = FastAPI(
-    title="Agent IA Autonome",
-    description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0",
+    title=config['app']['name'],
+    description=config['app']['description'],
+    version=config['app']['version'],
     lifespan=lifespan
 )
 
-# Add CORS middleware
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config['security']['cors_origins'],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ============ Models ============
-
-class Task(BaseModel):
-    id: Optional[str] = None
-    title: str
-    description: str
-    priority: int = 1
-    status: str = "pending"
-
-class TaskResponse(BaseModel):
-    success: bool
-    message: str
-    task_id: Optional[str] = None
-    status: Optional[str] = None
-
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    environment: str
-
 # ============ Routes ============
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
     return {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": config['app']['version'],
         "environment": settings.DEPLOYMENT_ENV
     }
 
-@app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
-async def create_task(task: Task):
-    """Create a new task for the agent"""
-    try:
-        logger.info(f"Creating task: {task.title}")
-        # TODO: Implement task creation logic
-        return TaskResponse(
-            success=True,
-            message="Task created successfully",
-            task_id="task_123",
-            status="pending"
-        )
-    except Exception:
-        logger.exception("Error creating task")
-        raise HTTPException(status_code=500, detail="Internal server error")
+@app.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """Placeholder for OAuth2 login (e.g. Gmail integration)"""
+    logger.info(f"Login attempt for user: {form_data.username}")
+    return {"access_token": "mock_token", "token_type": "bearer"}
 
-@app.get("/task/{task_id}", dependencies=[Depends(verify_api_key)])
-async def get_task(task_id: str):
-    """Get task status"""
-    try:
-        logger.info(f"Fetching task: {task_id}")
-        # TODO: Implement task retrieval logic
-        return {
-            "task_id": task_id,
-            "status": "pending",
-            "progress": 0
-        }
-    except Exception:
-        logger.exception(f"Error retrieving task: {task_id}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+@app.post("/upload/init", dependencies=[Depends(verify_api_key)])
+async def init_upload():
+    upload_id = str(uuid.uuid4())
+    return {"upload_id": upload_id}
 
-@app.get("/tasks", dependencies=[Depends(verify_api_key)])
-async def list_tasks():
-    """List all tasks"""
+@app.post("/upload/chunk", dependencies=[Depends(verify_api_key)])
+async def upload_chunk(
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    file: UploadFile = File(...)
+):
     try:
-        logger.info("Listing all tasks")
-        # TODO: Implement tasks listing logic
-        return {
-            "tasks": [],
-            "total": 0
-        }
-    except Exception:
-        logger.exception("Error listing tasks")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        content = await file.read()
+        await save_chunk(upload_id, chunk_index, content, settings.TEMP_DIR)
+        return {"status": "success", "chunk_index": chunk_index}
+    except Exception as e:
+        logger.error(f"Error saving chunk {chunk_index} for {upload_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error saving chunk")
 
-@app.post("/execute", dependencies=[Depends(verify_api_key)])
-async def execute_task(task_id: str):
-    """Execute a task"""
+@app.post("/upload/complete", dependencies=[Depends(verify_api_key)])
+async def complete_upload(
+    background_tasks: BackgroundTasks,
+    upload_id: str = Form(...),
+    total_chunks: int = Form(...),
+    filename: str = Form(...),
+    title: str = Form(...),
+    source_language: str = Form(...),
+    target_language: str = Form(...),
+    voice_id: str = Form(...),
+    consent_given: bool = Form(...)
+):
+    if not consent_given:
+        raise HTTPException(status_code=400, detail="GDPR consent is required for biometric processing")
+
     try:
-        logger.info(f"Executing task: {task_id}")
-        # TODO: Implement task execution logic
+        final_path = await assemble_chunks(upload_id, total_chunks, settings.TEMP_DIR, settings.FINAL_DIR, filename)
+
+        project_id = str(uuid.uuid4())
+        background_tasks.add_task(run_dubbing_pipeline, project_id, final_path, target_language, voice_id)
+
         return {
-            "success": True,
-            "message": "Task execution started",
-            "task_id": task_id
+            "status": "processing",
+            "project_id": project_id,
+            "file_path": final_path
         }
-    except Exception:
-        logger.exception(f"Error executing task: {task_id}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception as e:
+        logger.error(f"Error completing upload {upload_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error assembling chunks")
+
+@app.get("/project/{project_id}", dependencies=[Depends(verify_api_key)])
+async def get_project(project_id: str):
+    return {
+        "id": project_id,
+        "status": "processing",
+        "progress": 10
+    }
 
 # ============ Main ============
 
