@@ -1,9 +1,9 @@
-# Configuration for Agent IA Autonome
+# Configuration for Plateforme de Doublage Vocal Multilingue
 
 app:
-  name: "Agent IA Autonome"
+  name: "Plateforme de Doublage"
   version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  description: "Solution de doublage automatisé haute performance"
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
@@ -19,40 +19,43 @@ logging:
   file: "logs/agent.log"
 
 ai:
-  providers:
-    openai:
-      api_key: "${OPENAI_API_KEY:}"
-      model: "gpt-4"
-      temperature: 0.7
-      max_tokens: 2000
-    anthropic:
-      api_key: "${ANTHROPIC_API_KEY:}"
-      model: "claude-3"
-      temperature: 0.7
+  stt:
+    provider: "openai-whisper"
+    model: "large-v3"
+  mt:
+    provider: "deepl"
+    api_key: "${DEEPL_API_KEY:}"
+  tts:
+    provider: "google-cloud"
+    api_key: "${GOOGLE_TTS_API_KEY:}"
+  lip_sync:
+    model: "wav2lip"
+    use_gpu: true
+
+storage:
+  type: "s3"
+  bucket: "${S3_BUCKET_NAME:dubbing-media}"
+  region: "${AWS_REGION:eu-west-3}"
 
 database:
   url: "${DATABASE_URL:sqlite:///./agent.db}"
   echo: false
-  pool_size: 10
-  max_overflow: 20
 
 cache:
   redis_url: "${REDIS_URL:redis://localhost:6379/0}"
   ttl: 3600
 
 tasks:
-  max_concurrent: 10
-  timeout: 300
-  retry_attempts: 3
-  retry_delay: 5
+  max_concurrent: 5
+  timeout: 1800  # 30 minutes for large videos
+  retry_attempts: 2
 
 security:
   require_api_key: false
   cors_origins:
     - "*"
-  request_timeout: 30
+  request_timeout: 60
 
 monitoring:
   enabled: true
   prometheus_port: 9090
-  health_check_interval: 30
