@@ -7,12 +7,14 @@ Autonomous AI Agent capable of executing tasks on demand
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+from src.upload import init_upload, receive_chunk, get_upload_path
+from src.dubbing_pipeline import pipeline
 
 # Configure logging
 logging.basicConfig(
@@ -169,6 +171,58 @@ async def execute_task(task_id: str):
     except Exception:
         logger.exception(f"Error executing task: {task_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+# ============ Dubbing Routes ============
+
+class UploadInitRequest(BaseModel):
+    filename: str
+    total_chunks: int
+
+class ProcessRequest(BaseModel):
+    upload_id: str
+    target_lang: str
+
+@app.post("/dubbing/upload/init", dependencies=[Depends(verify_api_key)])
+async def dubbing_upload_init(req: UploadInitRequest):
+    """Initialize a chunked upload"""
+    upload_id = init_upload(req.filename, req.total_chunks)
+    return {"upload_id": upload_id}
+
+@app.post("/dubbing/upload/chunk", dependencies=[Depends(verify_api_key)])
+async def dubbing_upload_chunk(
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    file: UploadFile = File(...)
+):
+    """Upload a chunk of media using multipart/form-data"""
+    try:
+        chunk_data = await file.read()
+        is_complete = receive_chunk(upload_id, chunk_index, chunk_data)
+        return {"success": True, "is_complete": is_complete}
+    except Exception as e:
+        logger.exception("Error receiving chunk")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/dubbing/process", dependencies=[Depends(verify_api_key)])
+async def dubbing_process(req: ProcessRequest):
+    """Start the dubbing pipeline for an uploaded file"""
+    import uuid
+    path = get_upload_path(req.upload_id)
+    if not path:
+         # For the sake of the prototype, if not found in memory, we might just use a placeholder
+         path = f"placeholder_{req.upload_id}"
+
+    job_id = str(uuid.uuid4())
+    await pipeline.start_job(job_id, path, req.target_lang)
+    return {"job_id": job_id}
+
+@app.get("/dubbing/status/{job_id}", dependencies=[Depends(verify_api_key)])
+async def dubbing_status(job_id: str):
+    """Get the status of a dubbing job"""
+    status = pipeline.get_status(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
 
 # ============ Main ============
 
