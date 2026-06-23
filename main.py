@@ -5,9 +5,12 @@ Autonomous AI Agent capable of executing tasks on demand
 """
 
 import os
+import json
+import secrets
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, Response
+from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -20,6 +23,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 # ============ Settings ============
 
@@ -43,7 +49,8 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        # Use secrets.compare_digest to prevent timing attacks
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -99,22 +106,28 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
 
+# Pre-render health response for maximum performance
+HEALTH_RESPONSE_JSON = json.dumps({
+    "status": "healthy",
+    "version": "1.0.0",
+    "environment": settings.DEPLOYMENT_ENV
+})
+
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
-    return {
-        "status": "healthy",
-        "version": "1.0.0",
-        "environment": settings.DEPLOYMENT_ENV
-    }
+    """Health check endpoint - optimized to bypass Pydantic validation"""
+    return Response(
+        content=HEALTH_RESPONSE_JSON,
+        media_type="application/json"
+    )
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
     """Create a new task for the agent"""
     try:
-        logger.info(f"Creating task: {task.title}")
+        logger.info("Creating task: %s", task.title)
         # TODO: Implement task creation logic
         return TaskResponse(
             success=True,
@@ -130,7 +143,7 @@ async def create_task(task: Task):
 async def get_task(task_id: str):
     """Get task status"""
     try:
-        logger.info(f"Fetching task: {task_id}")
+        logger.info("Fetching task: %s", task_id)
         # TODO: Implement task retrieval logic
         return {
             "task_id": task_id,
@@ -138,7 +151,7 @@ async def get_task(task_id: str):
             "progress": 0
         }
     except Exception:
-        logger.exception(f"Error retrieving task: {task_id}")
+        logger.exception("Error retrieving task: %s", task_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/tasks", dependencies=[Depends(verify_api_key)])
@@ -159,7 +172,7 @@ async def list_tasks():
 async def execute_task(task_id: str):
     """Execute a task"""
     try:
-        logger.info(f"Executing task: {task_id}")
+        logger.info("Executing task: %s", task_id)
         # TODO: Implement task execution logic
         return {
             "success": True,
@@ -167,7 +180,7 @@ async def execute_task(task_id: str):
             "task_id": task_id
         }
     except Exception:
-        logger.exception(f"Error executing task: {task_id}")
+        logger.exception("Error executing task: %s", task_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============ Main ============
