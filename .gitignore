@@ -7,6 +7,11 @@ local.properties
 
 # Log/OS Files
 *.log
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
 
 # Android Studio generated files and folders
 captures/
