@@ -7,12 +7,14 @@ Autonomous AI Agent capable of executing tasks on demand
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, BackgroundTasks, status, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+from src.upload import router as upload_router
+from src.dubbing_pipeline import DubbingPipeline
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +41,17 @@ settings = Settings()
 
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """
+    Placeholder for OAuth2 user validation.
+    In a real app, this would verify the JWT from Google/FB.
+    """
+    if not token and settings.REQUIRE_API_KEY:
+         # Fallback to API Key or fail
+         pass
+    return {"user_id": "user_123", "email": "user@example.com"}
 
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
@@ -65,10 +78,13 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI app
 app = FastAPI(
     title="Agent IA Autonome",
-    description="Autonomous AI agent capable of executing tasks",
-    version="1.0.0",
+    description="Multilingual Voice Dubbing Platform",
+    version="1.1.0",
     lifespan=lifespan
 )
+
+# Include routers
+app.include_router(upload_router)
 
 # Add CORS middleware
 app.add_middleware(
@@ -169,6 +185,28 @@ async def execute_task(task_id: str):
     except Exception:
         logger.exception(f"Error executing task: {task_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/dub", dependencies=[Depends(verify_api_key)])
+async def start_dubbing(
+    video_path: str,
+    target_lang: str,
+    background_tasks: BackgroundTasks,
+    gdpr_consent: bool = Form(..., description="Explicit consent for biometric data processing"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Start the dubbing pipeline for a video.
+    Requires explicit GDPR consent for processing biometric (voice) data.
+    """
+    if not gdpr_consent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GDPR consent is required for biometric data processing."
+        )
+
+    pipeline = DubbingPipeline()
+    background_tasks.add_task(pipeline.run, video_path, target_lang)
+    return {"message": "Dubbing process started in background", "video_path": video_path}
 
 # ============ Main ============
 
