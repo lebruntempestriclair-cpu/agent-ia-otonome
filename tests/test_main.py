@@ -9,8 +9,22 @@ from fastapi.testclient import TestClient
 
 # Mock settings before importing app to test authentication
 with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
+    from main import app, Settings, load_config
     client = TestClient(app)
+
+class TestConfiguration:
+    """Tests for configuration loading"""
+
+    def test_load_config_defaults(self):
+        """Test that load_config returns a dict even if file is missing"""
+        config = load_config("non_existent.yaml")
+        assert isinstance(config, dict)
+
+    def test_env_substitution(self):
+        """Test environment variable substitution in config"""
+        with patch.dict(os.environ, {"DEPLOYMENT_ENV": "test_env"}):
+            config = load_config("config.yaml")
+            assert config["app"]["environment"] == "test_env"
 
 class TestSecurity:
     """Tests for security features"""
@@ -118,6 +132,34 @@ class TestTaskExecution:
         data = response.json()
         assert data["success"] is True
         assert "message" in data
+
+class TestDubbingEndpoint:
+    """Tests for the /dub endpoint"""
+
+    def test_dub_media_success(self):
+        """Test successful media upload and dubbing initiation"""
+        headers = {"X-API-Key": "test_secret_key"}
+        file_content = b"fake video content"
+        files = {"file": ("test.mp4", file_content, "video/mp4")}
+        data = {"gdpr_consent": "true", "target_language": "en"}
+
+        response = client.post("/dub", headers=headers, data=data, files=files)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["filename"] == "test.mp4"
+        assert "upload_id" in data
+
+    def test_dub_media_no_consent(self):
+        """Test that /dub fails without GDPR consent"""
+        headers = {"X-API-Key": "test_secret_key"}
+        file_content = b"fake video content"
+        files = {"file": ("test.mp4", file_content, "video/mp4")}
+        data = {"gdpr_consent": "false", "target_language": "en"}
+
+        response = client.post("/dub", headers=headers, data=data, files=files)
+        assert response.status_code == 400
+        assert "GDPR consent is mandatory" in response.json()["detail"]
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
