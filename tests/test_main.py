@@ -6,11 +6,12 @@ import pytest
 import os
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+from main import app, settings
 
-# Mock settings before importing app to test authentication
-with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
-    client = TestClient(app)
+# Force settings for testing
+settings.REQUIRE_API_KEY = True
+settings.API_KEY = "test_secret_key"
+client = TestClient(app)
 
 class TestSecurity:
     """Tests for security features"""
