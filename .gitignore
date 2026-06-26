@@ -1,3 +1,19 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# Project-specific uploads
+uploads/
+
+# Virtual environment
+venv/
+.venv/
+
 # Gradle files
 .gradle/
 build/
