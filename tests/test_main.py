@@ -47,6 +47,16 @@ class TestSecurity:
         response = client.get("/health")
         assert response.status_code == 200
 
+    def test_production_default_key_fails(self):
+        """Test that using default API key in production environment fails"""
+        with patch.dict(os.environ, {
+            "REQUIRE_API_KEY": "true",
+            "DEPLOYMENT_ENV": "production",
+            "API_KEY": "default_secret_key"
+        }):
+            with pytest.raises(ValueError, match="SECURITY ERROR: Default API key cannot be used in production environment."):
+                Settings()
+
 class TestHealthEndpoint:
     """Tests for the health check endpoint"""
     
