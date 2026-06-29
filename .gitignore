@@ -1,3 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Project specific
+uploads/
+*.log
+
 # Gradle files
 .gradle/
 build/

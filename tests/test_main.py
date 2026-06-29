@@ -7,25 +7,29 @@ import os
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-# Mock settings before importing app to test authentication
-with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
-    client = TestClient(app)
+from main import app, settings
+client = TestClient(app)
 
 class TestSecurity:
     """Tests for security features"""
 
+    def setup_method(self):
+        """Reset settings before each test"""
+        settings.REQUIRE_API_KEY = True
+        settings.API_KEY = "test_secret_key"
+
     def test_unauthenticated_access(self):
         """Test that sensitive endpoints require API key when enabled"""
         endpoints = [
-            ("/task/create", "post"),
-            ("/task/task_123", "get"),
-            ("/tasks", "get"),
-            ("/execute?task_id=task_123", "post")
+            # Using get/post as appropriate, and handling validation requirements
+            ("/task/create", "post", {"json": {"title": "T", "description": "D"}}),
+            ("/task/task_123", "get", {}),
+            ("/tasks", "get", {}),
+            ("/execute?task_id=task_123", "post", {})
         ]
-        for url, method in endpoints:
+        for url, method, kwargs in endpoints:
             func = getattr(client, method)
-            response = func(url)
+            response = func(url, **kwargs)
             assert response.status_code == 403
             assert response.json() == {"detail": "Could not validate credentials"}
 

@@ -29,6 +29,12 @@ ai:
       api_key: "${ANTHROPIC_API_KEY:}"
       model: "claude-3"
       temperature: 0.7
+    stt:
+      provider: "${STT_PROVIDER:google}"
+    mt:
+      provider: "${MT_PROVIDER:deepl}"
+    tts:
+      provider: "${TTS_PROVIDER:azure}"
 
 database:
   url: "${DATABASE_URL:sqlite:///./agent.db}"
@@ -45,6 +51,11 @@ tasks:
   timeout: 300
   retry_attempts: 3
   retry_delay: 5
+
+dubbing:
+  max_upload_size: 734003200 # 700MB
+  allowed_extensions: [".mp4", ".avi", ".mp3", ".wav"]
+  gdpr_retention_days: 30
 
 security:
   require_api_key: false
