@@ -18,14 +18,17 @@ class TestSecurity:
     def test_unauthenticated_access(self):
         """Test that sensitive endpoints require API key when enabled"""
         endpoints = [
-            ("/task/create", "post"),
-            ("/task/task_123", "get"),
-            ("/tasks", "get"),
-            ("/execute?task_id=task_123", "post")
+            ("/task/create", "post", {"title": "x", "description": "y"}),
+            ("/task/task_123", "get", None),
+            ("/tasks", "get", None),
+            ("/execute?task_id=task_123", "post", None)
         ]
-        for url, method in endpoints:
+        for url, method, json_data in endpoints:
             func = getattr(client, method)
-            response = func(url)
+            if json_data:
+                response = func(url, json=json_data)
+            else:
+                response = func(url)
             assert response.status_code == 403
             assert response.json() == {"detail": "Could not validate credentials"}
 
