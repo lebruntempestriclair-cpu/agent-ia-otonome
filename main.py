@@ -6,6 +6,7 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +34,12 @@ class Settings:
         self.API_PORT = int(os.getenv("API_PORT", 8000))
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
 
+        # Security safeguard: Require a non-default API key in production
+        if self.REQUIRE_API_KEY and self.DEPLOYMENT_ENV == "production":
+            if self.API_KEY == "default_secret_key":
+                logger.error("PRODUCTION SECURITY ERROR: Default API_KEY detected with REQUIRE_API_KEY=true")
+                raise ValueError("API_KEY must be changed from default in production environment")
+
 settings = Settings()
 
 # ============ Security ============
@@ -43,7 +50,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -70,10 +77,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# Add CORS middleware with restricted origins for production
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
+if settings.DEPLOYMENT_ENV == "development":
+    ALLOWED_ORIGINS = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
