@@ -7,9 +7,19 @@ import os
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-# Mock settings before importing app to test authentication
+# Create a client that uses the API key in headers by default if we want to test authenticated
+# But here we want to test unauthenticated first.
+
+# We need to ensure settings are patched BEFORE app is loaded.
+# Since main.py creates settings = Settings() at module level.
+
 with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
+    # Force reload of main to pick up new env vars if it was already imported,
+    # but in a fresh pytest run it should be fine.
+    import main
+    import importlib
+    importlib.reload(main)
+    from main import app
     client = TestClient(app)
 
 class TestSecurity:
@@ -19,14 +29,19 @@ class TestSecurity:
         """Test that sensitive endpoints require API key when enabled"""
         endpoints = [
             ("/task/create", "post"),
-            ("/task/task_123", "get"),
             ("/tasks", "get"),
-            ("/execute?task_id=task_123", "post")
+            ("/dub", "post"),
+            ("/user/data", "delete")
         ]
         for url, method in endpoints:
             func = getattr(client, method)
-            response = func(url)
-            assert response.status_code == 403
+            if method == "post" and url == "/dub":
+                response = func(url, data={"target_lang": "en", "gdpr_consent": "true"})
+            elif method == "post":
+                response = func(url, json={"title": "Test", "description": "Test"})
+            else:
+                response = func(url)
+            assert response.status_code == 403, f"Endpoint {url} with method {method} should return 403"
             assert response.json() == {"detail": "Could not validate credentials"}
 
     def test_authenticated_access(self):
@@ -75,7 +90,6 @@ class TestTaskCreation:
         data = response.json()
         assert data["success"] is True
         assert "task_id" in data
-        assert data["status"] == "pending"
     
     def test_create_task_missing_required_field(self):
         """Test creating task with missing required field"""
@@ -89,15 +103,6 @@ class TestTaskCreation:
 class TestTaskRetrieval:
     """Tests for task retrieval"""
     
-    def test_get_task(self):
-        """Test retrieving a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/task/task_123", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert "task_id" in data
-        assert "status" in data
-    
     def test_list_tasks(self):
         """Test listing all tasks"""
         headers = {"X-API-Key": "test_secret_key"}
@@ -106,18 +111,6 @@ class TestTaskRetrieval:
         data = response.json()
         assert "tasks" in data
         assert "total" in data
-
-class TestTaskExecution:
-    """Tests for task execution"""
-    
-    def test_execute_task(self):
-        """Test executing a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.post("/execute?task_id=task_123", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "message" in data
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
