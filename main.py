@@ -6,6 +6,7 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,11 @@ class Settings:
         self.REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
         self.API_KEY = os.getenv("API_KEY", "default_secret_key")
         self.DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "development")
+
+        # Security safeguard: Prevent using default API key in production
+        if self.DEPLOYMENT_ENV == "production" and self.REQUIRE_API_KEY and self.API_KEY == "default_secret_key":
+            raise ValueError("SECURITY ERROR: Default API key cannot be used in production environment.")
+
         self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
         self.API_PORT = int(os.getenv("API_PORT", 8000))
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
@@ -43,7 +49,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
