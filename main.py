@@ -5,6 +5,7 @@ Autonomous AI Agent capable of executing tasks on demand
 """
 
 import os
+import secrets
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security
@@ -33,6 +34,12 @@ class Settings:
         self.API_PORT = int(os.getenv("API_PORT", 8000))
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
 
+        # Production Safeguard: Ensure a secure API key is used in production
+        if self.DEPLOYMENT_ENV == "production" and self.REQUIRE_API_KEY:
+            if self.API_KEY == "default_secret_key":
+                logger.error("PRODUCTION SECURITY ALERT: Default API key cannot be used in production")
+                raise ValueError("Default API key is not allowed in production environment")
+
 settings = Settings()
 
 # ============ Security ============
@@ -41,9 +48,9 @@ API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def verify_api_key(header_value: str = Security(api_key_header)):
-    """Validate the API key from the header if required"""
+    """Validate the API key from the header if required using constant-time comparison"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -71,9 +78,14 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Security: Restricted origins in production, wildcard only in development
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",")]
+if settings.DEPLOYMENT_ENV == "production" and "*" in allowed_origins:
+    logger.warning("CORS: Wildcard origin allowed in production! Consider restricting ALLOWED_ORIGINS.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
