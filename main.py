@@ -7,12 +7,14 @@ Autonomous AI Agent capable of executing tasks on demand
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+import json
+import secrets
 
 # Configure logging
 logging.basicConfig(
@@ -31,9 +33,17 @@ class Settings:
         self.DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "development")
         self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
         self.API_PORT = int(os.getenv("API_PORT", 8000))
-        self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
+        self.API_WORKERS = int(os.getenv("API_WORKERS", 4))
 
 settings = Settings()
+
+# Pre-rendered health response to bypass Pydantic overhead
+HEALTH_DATA = {
+    "status": "healthy",
+    "version": "1.0.0",
+    "environment": settings.DEPLOYMENT_ENV
+}
+HEALTH_JSON = json.dumps(HEALTH_DATA)
 
 # ============ Security ============
 
@@ -43,7 +53,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 async def verify_api_key(header_value: str = Security(api_key_header)):
     """Validate the API key from the header if required"""
     if settings.REQUIRE_API_KEY:
-        if not header_value or header_value != settings.API_KEY:
+        if not header_value or not secrets.compare_digest(header_value, settings.API_KEY):
             logger.warning("Invalid or missing API key provided")
             raise HTTPException(
                 status_code=403,
@@ -101,14 +111,13 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
-    return {
-        "status": "healthy",
-        "version": "1.0.0",
-        "environment": settings.DEPLOYMENT_ENV
-    }
+    """Health check endpoint - optimized to return pre-rendered JSON"""
+    return Response(
+        content=HEALTH_JSON,
+        media_type="application/json"
+    )
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
