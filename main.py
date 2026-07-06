@@ -6,8 +6,10 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import json
+import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -34,6 +36,13 @@ class Settings:
         self.API_WORKERS = int(os.getenv("API_WORKERS", 1))
 
 settings = Settings()
+
+# Pre-render health response for maximum performance
+HEALTH_DATA = json.dumps({
+    "status": "healthy",
+    "version": "1.0.0",
+    "environment": settings.DEPLOYMENT_ENV
+})
 
 # ============ Security ============
 
@@ -101,14 +110,13 @@ class HealthResponse(BaseModel):
 
 # ============ Routes ============
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", responses={200: {"model": HealthResponse}})
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
-    return {
-        "status": "healthy",
-        "version": "1.0.0",
-        "environment": settings.DEPLOYMENT_ENV
-    }
+    """Health check endpoint - returns pre-rendered JSON response for maximum speed"""
+    return Response(
+        content=HEALTH_DATA,
+        media_type="application/json"
+    )
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
