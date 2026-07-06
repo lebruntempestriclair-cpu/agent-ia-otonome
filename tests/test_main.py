@@ -1,5 +1,5 @@
 """
-Unit tests for the Agent IA Autonome application
+Unit tests for the Multilingual Dubbing Platform
 """
 
 import pytest
@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 # Mock settings before importing app to test authentication
 with patch.dict(os.environ, {"REQUIRE_API_KEY": "true", "API_KEY": "test_secret_key"}):
-    from main import app, Settings
+    from main import app
     client = TestClient(app)
 
 class TestSecurity:
@@ -18,10 +18,10 @@ class TestSecurity:
     def test_unauthenticated_access(self):
         """Test that sensitive endpoints require API key when enabled"""
         endpoints = [
-            ("/task/create", "post"),
-            ("/task/task_123", "get"),
-            ("/tasks", "get"),
-            ("/execute?task_id=task_123", "post")
+            ("/project/create", "post"),
+            ("/project/proj_123", "get"),
+            ("/projects", "get"),
+            ("/upload/init", "post")
         ]
         for url, method in endpoints:
             func = getattr(client, method)
@@ -33,13 +33,18 @@ class TestSecurity:
         """Test that sensitive endpoints allow access with valid API key"""
         headers = {"X-API-Key": "test_secret_key"}
 
-        # Test task creation
-        task_data = {"title": "Test", "description": "Test"}
-        response = client.post("/task/create", json=task_data, headers=headers)
+        # Test project creation
+        project_data = {
+            "title": "Test Project",
+            "voice_settings": {
+                "language_code": "en-US"
+            }
+        }
+        response = client.post("/project/create", json=project_data, headers=headers)
         assert response.status_code == 200
 
-        # Test list tasks
-        response = client.get("/tasks", headers=headers)
+        # Test list projects
+        response = client.get("/projects", headers=headers)
         assert response.status_code == 200
 
     def test_health_check_remains_public(self):
@@ -59,65 +64,55 @@ class TestHealthEndpoint:
         assert "version" in data
         assert "environment" in data
 
-class TestTaskCreation:
-    """Tests for task creation"""
+class TestProjectLifecycle:
+    """Tests for project creation and retrieval"""
     
-    def test_create_task(self):
-        """Test creating a new task"""
+    def test_create_project(self):
+        """Test creating a new dubbing project"""
         headers = {"X-API-Key": "test_secret_key"}
-        task_data = {
-            "title": "Test Task",
-            "description": "This is a test task",
-            "priority": 1
+        project_data = {
+            "title": "My Dubbing Project",
+            "voice_settings": {
+                "language_code": "fr-FR",
+                "gender": "female"
+            }
         }
-        response = client.post("/task/create", json=task_data, headers=headers)
+        response = client.post("/project/create", json=project_data, headers=headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
-        assert "task_id" in data
-        assert data["status"] == "pending"
+        assert data["title"] == "My Dubbing Project"
+        assert "id" in data
+        assert data["status"] == "created"
+        return data["id"]
     
-    def test_create_task_missing_required_field(self):
-        """Test creating task with missing required field"""
+    def test_get_project(self):
+        """Test retrieving project details"""
         headers = {"X-API-Key": "test_secret_key"}
-        task_data = {
-            "description": "Missing title"
+        # First create
+        project_data = {"title": "FindMe", "voice_settings": {"language_code": "es-ES"}}
+        create_res = client.post("/project/create", json=project_data, headers=headers)
+        project_id = create_res.json()["id"]
+
+        # Then get
+        response = client.get(f"/project/{project_id}", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["id"] == project_id
+
+class TestMediaUpload:
+    """Tests for chunked upload initialization"""
+    
+    def test_initialize_upload(self):
+        """Test initializing a chunked upload"""
+        headers = {"X-API-Key": "test_secret_key"}
+        upload_data = {
+            "filename": "video.mp4",
+            "total_size": 10485760
         }
-        response = client.post("/task/create", json=task_data, headers=headers)
-        assert response.status_code == 422  # Validation error
-
-class TestTaskRetrieval:
-    """Tests for task retrieval"""
-    
-    def test_get_task(self):
-        """Test retrieving a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/task/task_123", headers=headers)
+        response = client.post("/upload/init", data=upload_data, headers=headers)
         assert response.status_code == 200
         data = response.json()
-        assert "task_id" in data
-        assert "status" in data
-    
-    def test_list_tasks(self):
-        """Test listing all tasks"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/tasks", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert "tasks" in data
-        assert "total" in data
-
-class TestTaskExecution:
-    """Tests for task execution"""
-    
-    def test_execute_task(self):
-        """Test executing a task"""
-        headers = {"X-API-Key": "test_secret_key"}
-        response = client.post("/execute?task_id=task_123", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "message" in data
+        assert "upload_id" in data
+        assert "chunk_size" in data
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

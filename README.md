@@ -1,15 +1,16 @@
-# 🤖 Agent IA Autonome
+# 🎙️ Multilingual Dubbing Platform
 
-Agent IA autonome capable d'accomplir, de faire fonctionner, d'entrer et de sélectionner des tâches à accomplir à la demande du créateur.
+Plateforme web de doublage vocal multilingue intégrant l'upload de fichiers volumineux, la transcription (STT), la traduction (MT), la synthèse vocale (TTS) et la synchronisation labiale (Lip-sync).
 
 ## ✨ Fonctionnalités
 
-- 🎯 **Exécution autonome de tâches** - L'agent exécute automatiquement les tâches demandées
-- 🔄 **Gestion d'état persistant** - Sauvegarde et récupération de l'état de l'agent
-- 🚀 **API REST complète** - Interface HTTP pour interagir avec l'agent
-- 📊 **Monitoring en temps réel** - Suivi de l'exécution des tâches
-- 🐳 **Containerisé** - Prêt pour le déploiement avec Docker
-- 🧪 **Complètement testé** - Suite de tests unitaires complète
+- 🎥 **Traitement Vidéo & Audio** - Support des fichiers MP4, AVI, MP3, WAV (>700 Mo)
+- 🧩 **Upload Chunké** - Chargement fiable des fichiers volumineux par segments
+- 🗣️ **Pipeline IA Complet** - Intégration STT (Whisper), MT (DeepL), TTS (Azure/Polly)
+- 👄 **Lip-Sync** - Synchronisation labiale automatique (Wav2Lip)
+- 🌍 **Multilingue** - Support de plus de 100 langues et styles de voix
+- ⚖️ **Conformité RGPD** - Gestion rigoureuse des données biométriques (voix)
+- 🚀 **Architecture Microservices** - Scalabilité horizontale avec Docker/Kubernetes
 
 ## 🚀 Démarrage Rapide
 

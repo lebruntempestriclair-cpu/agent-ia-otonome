@@ -1,15 +1,15 @@
-# Configuration for Agent IA Autonome
+# Configuration for Multilingual Dubbing Platform
 
 app:
-  name: "Agent IA Autonome"
+  name: "Multilingual Dubbing Platform"
   version: "1.0.0"
-  description: "Autonomous AI agent capable of executing tasks"
+  description: "Web platform for multilingual voice dubbing and lip-sync"
   environment: "${DEPLOYMENT_ENV:development}"
 
 server:
   host: "${API_HOST:0.0.0.0}"
   port: "${API_PORT:8000}"
-  workers: "${API_WORKERS:4}"
+  workers: "${API_WORKERS:1}"
   reload: true
   debug: "${DEBUG:false}"
 
@@ -19,40 +19,45 @@ logging:
   file: "logs/agent.log"
 
 ai:
-  providers:
+  stt:
+    provider: "openai" # whisper, google, amazon
     openai:
       api_key: "${OPENAI_API_KEY:}"
-      model: "gpt-4"
-      temperature: 0.7
-      max_tokens: 2000
-    anthropic:
-      api_key: "${ANTHROPIC_API_KEY:}"
-      model: "claude-3"
-      temperature: 0.7
+      model: "whisper-1"
+  mt:
+    provider: "deepl" # google, microsoft
+    deepl:
+      api_key: "${DEEPL_API_KEY:}"
+  tts:
+    provider: "azure" # polly, google
+    azure:
+      api_key: "${AZURE_TTS_KEY:}"
+      region: "${AZURE_REGION:eastus}"
+    polly:
+      access_key: "${AWS_ACCESS_KEY:}"
+      secret_key: "${AWS_SECRET_KEY:}"
+      region: "${AWS_REGION:us-east-1}"
+  lip_sync:
+    model: "wav2lip"
 
 database:
   url: "${DATABASE_URL:sqlite:///./agent.db}"
   echo: false
-  pool_size: 10
-  max_overflow: 20
 
-cache:
-  redis_url: "${REDIS_URL:redis://localhost:6379/0}"
-  ttl: 3600
-
-tasks:
-  max_concurrent: 10
-  timeout: 300
-  retry_attempts: 3
-  retry_delay: 5
+storage:
+  type: "local" # local, s3, azure_blob
+  local_path: "./data/uploads"
+  s3:
+    bucket: "${S3_BUCKET:}"
+  chunk_size_mb: 5
+  max_file_size_mb: 1000
 
 security:
   require_api_key: false
   cors_origins:
     - "*"
-  request_timeout: 30
+  request_timeout: 60
 
 monitoring:
   enabled: true
   prometheus_port: 9090
-  health_check_interval: 30
