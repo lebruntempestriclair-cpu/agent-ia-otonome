@@ -92,10 +92,16 @@ class TestTaskRetrieval:
     def test_get_task(self):
         """Test retrieving a task"""
         headers = {"X-API-Key": "test_secret_key"}
-        response = client.get("/task/task_123", headers=headers)
+
+        # Create a task first
+        task_data = {"title": "Retrieve Test", "description": "Test"}
+        create_res = client.post("/task/create", json=task_data, headers=headers)
+        task_id = create_res.json()["task_id"]
+
+        response = client.get(f"/task/{task_id}", headers=headers)
         assert response.status_code == 200
         data = response.json()
-        assert "task_id" in data
+        assert data["id"] == task_id
         assert "status" in data
     
     def test_list_tasks(self):
@@ -113,7 +119,13 @@ class TestTaskExecution:
     def test_execute_task(self):
         """Test executing a task"""
         headers = {"X-API-Key": "test_secret_key"}
-        response = client.post("/execute?task_id=task_123", headers=headers)
+
+        # Create a task first
+        task_data = {"title": "Execute Test", "description": "Test"}
+        create_res = client.post("/task/create", json=task_data, headers=headers)
+        task_id = create_res.json()["task_id"]
+
+        response = client.post(f"/execute?task_id={task_id}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True

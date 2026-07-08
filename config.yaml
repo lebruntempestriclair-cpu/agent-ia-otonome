@@ -47,7 +47,7 @@ tasks:
   retry_delay: 5
 
 security:
-  require_api_key: false
+  require_api_key: "${REQUIRE_API_KEY:false}"
   cors_origins:
     - "*"
   request_timeout: 30
