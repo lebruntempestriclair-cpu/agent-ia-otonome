@@ -6,8 +6,9 @@ Autonomous AI Agent capable of executing tasks on demand
 
 import os
 import logging
+import json
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -81,6 +82,14 @@ app.add_middleware(
 
 # ============ Models ============
 
+# Pre-render health response for high-frequency polling optimization
+_HEALTH_DATA = {
+    "status": "healthy",
+    "version": "1.0.0",
+    "environment": settings.DEPLOYMENT_ENV
+}
+_HEALTH_JSON = json.dumps(_HEALTH_DATA).encode("utf-8")
+
 class Task(BaseModel):
     id: Optional[str] = None
     title: str
@@ -103,12 +112,12 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint - optimized to return raw dict if needed"""
-    return {
-        "status": "healthy",
-        "version": "1.0.0",
-        "environment": settings.DEPLOYMENT_ENV
-    }
+    """
+    Health check endpoint.
+    Bolt ⚡: Optimized by returning pre-rendered JSON to bypass
+    Pydantic validation and serialization overhead on every request.
+    """
+    return Response(content=_HEALTH_JSON, media_type="application/json")
 
 @app.post("/task/create", response_model=TaskResponse, dependencies=[Depends(verify_api_key)])
 async def create_task(task: Task):
